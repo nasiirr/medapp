@@ -160,7 +160,6 @@ const ScheduleEditor: React.FC<ScheduleEditorProps> = ({
                         type="time"
                         value={newTimeInputs[originalDayIndex]}
                         onChange={(e) => handleNewTimeInputChange(originalDayIndex, e.target.value)}
-                        className="max-w-xs"
                         aria-label={`New dose time for ${dayName}`}
                       />
                       <Button onClick={() => handleAddTimeDose(originalDayIndex)} variant="outline">

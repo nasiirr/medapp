@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -12,31 +13,27 @@ const initialSchedule: WeekSchedule = Array(7).fill(null).map(() => Array(24).fi
 
 const ScheduleManager: React.FC = () => {
   const [schedule, setSchedule] = useState<WeekSchedule | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [isLoadingData, setIsLoadingData] = useState<boolean>(true); // For initial data load
+  const [isSaving, setIsSaving] = useState<boolean>(false); // For save operation
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
     const scheduleRef = ref(database, 'schedules');
     
-    // Initial fetch and setup listener
+    setIsLoadingData(true);
     const unsubscribe = onValue(scheduleRef, async (snapshot) => {
-      setIsLoading(true);
       if (snapshot.exists()) {
         const data = snapshot.val() as WeekSchedule;
-        // Ensure data is a valid 7x24 array
         if (Array.isArray(data) && data.length === 7 && data.every(day => Array.isArray(day) && day.length === 24)) {
           setSchedule(data);
         } else {
-          // Data is malformed, set to initialSchedule and optionally notify
           console.warn("Firebase schedule data is malformed. Resetting to default.");
           setSchedule(initialSchedule);
           // Optionally, update Firebase with the correct structure
           // await set(scheduleRef, initialSchedule); 
         }
       } else {
-        // No schedule found, initialize with default and set in Firebase
         setSchedule(initialSchedule);
         try {
           await set(scheduleRef, initialSchedule);
@@ -46,12 +43,12 @@ const ScheduleManager: React.FC = () => {
           toast({ variant: "destructive", title: "Error", description: "Failed to initialize schedule in Firebase." });
         }
       }
-      setIsLoading(false);
+      setIsLoadingData(false);
     }, (err) => {
       console.error("Firebase onValue error:", err);
       setError("Failed to load schedule. Please try again later.");
       toast({ variant: "destructive", title: "Error", description: "Failed to connect to schedule data." });
-      setIsLoading(false);
+      setIsLoadingData(false);
     });
 
     return () => unsubscribe();
@@ -60,7 +57,7 @@ const ScheduleManager: React.FC = () => {
   const handleToggleSlot = useCallback((dayIndex: number, hourIndex: number) => {
     setSchedule(prevSchedule => {
       if (!prevSchedule) return null;
-      const newSchedule = prevSchedule.map(day => [...day]); // Deep copy
+      const newSchedule = prevSchedule.map(day => [...day]); 
       newSchedule[dayIndex][hourIndex] = !newSchedule[dayIndex][hourIndex];
       return newSchedule;
     });
@@ -86,7 +83,7 @@ const ScheduleManager: React.FC = () => {
     }
   };
 
-  if (isLoading && !schedule) {
+  if (isLoadingData) { // Use isLoadingData for the initial data fetch skeleton
     return (
       <div className="space-y-4">
         <Skeleton className="h-12 w-1/2" />
@@ -98,24 +95,14 @@ const ScheduleManager: React.FC = () => {
   if (error) {
     return <p className="text-destructive text-center p-4">{error}</p>;
   }
-
-  if (!schedule) {
-     return ( // Fallback if schedule is null after loading attempt (e.g., severe Firebase error)
-      <div className="space-y-4 p-4 text-center">
-        <p>Could not load schedule. Retrying or check connection.</p>
-        <Skeleton className="h-12 w-1/2 mx-auto" />
-        <Skeleton className="h-64 w-full" />
-      </div>
-    );
-  }
   
-
+  // ScheduleGrid now handles its internal display loading/skeleton for reordering
   return (
     <ScheduleGrid
-      schedule={schedule}
+      schedule={schedule} // Pass schedule (can be null if not yet loaded or error)
       onToggleSlot={handleToggleSlot}
       onSave={handleSaveSchedule}
-      isLoading={isSaving}
+      isLoading={isSaving} // isSaving is for the save button state
     />
   );
 };

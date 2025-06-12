@@ -5,11 +5,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { database } from '@/lib/firebase';
 import { ref, onValue, set } from 'firebase/database';
 import type { WeekSchedule, DoseTime } from '@/types';
-import ScheduleEditor from './ScheduleEditor'; // Changed from ScheduleGrid
+import ScheduleEditor from './ScheduleEditor';
 import { useToast } from "@/hooks/use-toast";
-import { Skeleton } from "@/components/ui/skeleton";
+import { ensureScheduleArray } from '@/lib/utils';
 
-// Default schedule: 8 AM, 12 PM (Emergency), 1 PM, 8 PM
 const createInitialSchedule = (): WeekSchedule => {
   const dailyDefaultTimes: DoseTime[] = ["08:00", "12:00", "13:00", "20:00"].sort();
   return Array(7).fill(null).map(() => [...dailyDefaultTimes]);
@@ -30,24 +29,30 @@ const ScheduleManager: React.FC = () => {
 
     const unsubscribe = onValue(scheduleRef, async (snapshot) => {
       if (snapshot.exists()) {
-        const data = snapshot.val() as WeekSchedule;
-        // Validate the structure of data according to new WeekSchedule (string[][])
+        const rawData = snapshot.val();
+        const convertedData = ensureScheduleArray(rawData);
+
         if (
-          Array.isArray(data) &&
-          data.length === 7 &&
-          data.every(daySchedule =>
-            Array.isArray(daySchedule) &&
+          convertedData && // Check if conversion was successful and data is not null
+          convertedData.length === 7 &&
+          convertedData.every(daySchedule =>
+            Array.isArray(daySchedule) && // This check is a bit redundant if ensureScheduleArray guarantees it
             daySchedule.every(time => typeof time === 'string' && /^\d{2}:\d{2}$/.test(time))
           )
         ) {
-          setSchedule(data.map(dayTimes => dayTimes.sort())); // Ensure times are sorted
+          setSchedule(convertedData.map(dayTimes => dayTimes.sort()));
         } else {
-          console.warn("Firebase schedule data is malformed or incompatible with new structure. Resetting to default.");
+          console.warn("Firebase schedule data is malformed or incompatible. Resetting to default. Raw data:", rawData);
           setSchedule(initialSchedule);
-          await set(scheduleRef, initialSchedule); // Overwrite malformed data
+          try {
+            await set(scheduleRef, initialSchedule);
+            toast({ title: "Schedule Corrected", description: "Schedule data was incompatible and has been reset to default." });
+          } catch (e) {
+            console.error("Failed to set corrected initial schedule in Firebase:", e);
+            // Don't toast here as it might conflict with other error toasts
+          }
         }
       } else {
-        // No schedule found, set initial one in Firebase
         setSchedule(initialSchedule);
         try {
           await set(scheduleRef, initialSchedule);
@@ -74,7 +79,7 @@ const ScheduleManager: React.FC = () => {
       return;
     }
     setSchedule(prevSchedule => {
-      if (!prevSchedule) return null;
+      if (!prevSchedule) return null; // Should ideally not happen if loading state is managed
       const newSchedule = prevSchedule.map(day => [...day]);
       if (!newSchedule[dayIndex].includes(time)) {
         newSchedule[dayIndex] = [...newSchedule[dayIndex], time].sort();
@@ -103,10 +108,9 @@ const ScheduleManager: React.FC = () => {
     setError(null);
     try {
       const scheduleRef = ref(database, 'schedules');
-      // Ensure all day schedules are sorted before saving
       const sortedSchedule = schedule.map(dayTimes => [...dayTimes].sort());
       await set(scheduleRef, sortedSchedule);
-      setSchedule(sortedSchedule); // Update local state to be sorted one
+      setSchedule(sortedSchedule); 
       toast({ title: "Schedule Saved", description: "Your medication schedule has been updated successfully.", className: "bg-accent text-accent-foreground" });
     } catch (e) {
       console.error("Failed to save schedule:", e);

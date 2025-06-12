@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { database } from '@/lib/firebase';
 import { ref, onValue } from 'firebase/database';
-import type { WeekSchedule, DoseTime } from '@/types'; // DoseTime is string "HH:MM"
+import type { WeekSchedule } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BellRing, CalendarX } from 'lucide-react';
@@ -15,9 +15,9 @@ import {
   setMinutes, 
   setSeconds, 
   isAfter, 
-  getDay, 
-  parse 
+  getDay 
 } from 'date-fns';
+import { ensureScheduleArray } from '@/lib/utils';
 
 const daysOfWeekShort = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -27,31 +27,35 @@ const NextMedicationCard: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  const now = useMemo(() => new Date(), []); // Memoize `now` to stabilize useEffect dependency
+  const now = useMemo(() => new Date(), []);
 
   useEffect(() => {
     const scheduleRef = ref(database, 'schedules');
     const unsubscribe = onValue(scheduleRef, (snapshot) => {
-      setIsLoading(true);
+      setIsLoading(true); // Set loading true at the start of data processing
       if (snapshot.exists()) {
-        const data = snapshot.val() as WeekSchedule;
+        const rawData = snapshot.val();
+        const convertedData = ensureScheduleArray(rawData);
+        
         if (
-          Array.isArray(data) &&
-          data.length === 7 &&
-          data.every(daySchedule =>
-            Array.isArray(daySchedule) &&
+          convertedData &&
+          convertedData.length === 7 &&
+          convertedData.every(daySchedule =>
+            // ensureScheduleArray should guarantee daySchedule is an array if convertedData is not null
+            Array.isArray(daySchedule) && 
             daySchedule.every(time => typeof time === 'string' && /^\d{2}:\d{2}$/.test(time))
           )
         ) {
-          setSchedule(data.map(dayTimes => dayTimes.sort())); // Ensure times are sorted
+          setSchedule(convertedData.map(dayTimes => dayTimes.sort()));
+          setError(null); // Clear previous errors
         } else {
-          console.warn("NextMedicationCard: Firebase schedule data is malformed.");
+          console.warn("NextMedicationCard: Firebase schedule data is malformed or incompatible. Raw data:", rawData);
           setSchedule(null);
           setError("Schedule data is not in the expected format.");
         }
       } else {
         setSchedule(null);
-        setError("No schedule data found to determine next dose.");
+        setError("No schedule data found.");
       }
       setIsLoading(false);
     }, (err) => {
@@ -63,25 +67,25 @@ const NextMedicationCard: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!schedule || isLoading) {
-      // If schedule is null (not loaded, error, or empty) or still loading, don't calculate.
-      // If there's an error already, keep that error message.
-      if (!isLoading && !error && !schedule) {
-         setNextDoseString("Schedule not available or empty.");
-      }
-      return;
+    if (isLoading) { // If still loading from Firebase, wait
+        setNextDoseString(null); // Clear any old dose string
+        return;
+    }
+    if (error || !schedule) { // If there's an error or no schedule (even after loading)
+        setNextDoseString(null); // Error message is handled by render, clear dose string
+        return;
     }
 
     let upcomingDoseDate: Date | null = null;
 
-    for (let d = 0; d < 7; d++) { // Check from today up to 6 days in the future
+    for (let d = 0; d < 7; d++) { 
       const currentDateToCheck = addDays(now, d);
-      const dayIndex = getDay(currentDateToCheck); // 0 for Sunday, 1 for Monday, etc.
+      const dayIndex = getDay(currentDateToCheck); 
       
-      const dayScheduleTimes = schedule[dayIndex]; // This is DoseTime[] (e.g., ["08:00", "14:30"])
+      const dayScheduleTimes = schedule[dayIndex];
       if (!dayScheduleTimes || dayScheduleTimes.length === 0) continue;
 
-      for (const timeStr of dayScheduleTimes) { // timeStr is "HH:MM"
+      for (const timeStr of dayScheduleTimes) { 
         const [hour, minute] = timeStr.split(':').map(Number);
         let doseDateTime = setSeconds(setMinutes(setHours(currentDateToCheck, hour), minute), 0);
         
@@ -91,13 +95,10 @@ const NextMedicationCard: React.FC = () => {
           }
         }
       }
-      // If we found a dose on the current day `d` that is the soonest, no need to check further for this iteration
-      // but we must check all 7 days to find the absolute soonest.
     }
 
     if (upcomingDoseDate) {
       setNextDoseString(`${daysOfWeekShort[getDay(upcomingDoseDate)]}, ${format(upcomingDoseDate, 'p')}`);
-      setError(null); // Clear previous errors if successful
     } else {
       setNextDoseString("No upcoming doses scheduled for the next 7 days.");
     }
@@ -138,7 +139,7 @@ const NextMedicationCard: React.FC = () => {
         ) : nextDoseString ? (
           <p className="text-lg text-foreground">{nextDoseString}</p>
         ) : (
-          <p className="text-muted-foreground">Calculating next dose...</p> // Should be covered by isLoading or error/nextDoseString
+          <p className="text-muted-foreground">No schedule available or no upcoming doses.</p>
         )}
       </CardContent>
     </Card>

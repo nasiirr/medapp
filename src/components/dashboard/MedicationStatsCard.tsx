@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { database } from '@/lib/firebase';
 import { ref, onValue, query, orderByChild } from 'firebase/database';
-import type { WeekSchedule, MedicationLog, DoseTime } from '@/types';
+import type { WeekSchedule, MedicationLog } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ClipboardList, AlertCircle, TrendingUp, TrendingDown, CheckCircle } from 'lucide-react';
@@ -21,6 +21,7 @@ import {
   setSeconds,
   isBefore,
 } from 'date-fns';
+import { ensureScheduleArray } from '@/lib/utils';
 
 interface Stats {
   scheduledTodayPast: number;
@@ -45,33 +46,39 @@ const MedicationStatsCard: React.FC = () => {
     const logsRef = ref(database, 'medication_logs');
     const logsQuery = query(logsRef, orderByChild('timestamp'));
 
-    let scheduleData: WeekSchedule | null = null;
-    let logsData: MedicationLog[] = [];
+    let scheduleDataInternal: WeekSchedule | null = null;
+    let logsDataInternal: MedicationLog[] = [];
+    let scheduleError: string | null = null;
+    let logsError: string | null = null;
 
     const onScheduleValue = onValue(scheduleRef, (scheduleSnapshot) => {
       if (scheduleSnapshot.exists()) {
-        const data = scheduleSnapshot.val() as WeekSchedule;
-         if (
-          Array.isArray(data) &&
-          data.length === 7 &&
-          data.every(daySchedule =>
-            Array.isArray(daySchedule) &&
+        const rawData = scheduleSnapshot.val();
+        const convertedData = ensureScheduleArray(rawData);
+        if (
+          convertedData &&
+          convertedData.length === 7 &&
+          convertedData.every(daySchedule => 
+            Array.isArray(daySchedule) && 
             daySchedule.every(time => typeof time === 'string' && /^\d{2}:\d{2}$/.test(time))
           )
         ) {
-          scheduleData = data.map(dayTimes => dayTimes.sort());
+          scheduleDataInternal = convertedData.map(dayTimes => dayTimes.sort());
+          scheduleError = null;
         } else {
-           console.warn("MedicationStatsCard: Firebase schedule data is malformed.");
-           scheduleData = null;
+          console.warn("MedicationStatsCard: Firebase schedule data is malformed or incompatible. Raw data:", rawData);
+          scheduleDataInternal = null;
+          scheduleError = "Schedule data is invalid.";
         }
       } else {
-        scheduleData = null;
+        scheduleDataInternal = null;
+        scheduleError = "No schedule data found.";
       }
       tryCalculateStats();
     }, (err) => {
       console.error("Firebase onValue error for schedule in MedicationStatsCard:", err);
-      setError("Failed to load schedule data.");
-      setIsLoading(false);
+      scheduleError = "Failed to load schedule data.";
+      tryCalculateStats(); // Attempt calculation even if one source fails to update loading/error state
     });
 
     const onLogsValue = onValue(logsQuery, (logsSnapshot) => {
@@ -81,28 +88,46 @@ const MedicationStatsCard: React.FC = () => {
           allLogs.push({ id: childSnapshot.key!, ...childSnapshot.val() });
         });
       }
-      logsData = allLogs;
+      logsDataInternal = allLogs;
+      logsError = null;
       tryCalculateStats();
     }, (err) => {
       console.error("Firebase onValue error for logs in MedicationStatsCard:", err);
-      setError("Failed to load medication logs.");
-      setIsLoading(false);
+      logsError = "Failed to load medication logs.";
+      tryCalculateStats();
     });
 
     const tryCalculateStats = () => {
-      if (scheduleData === undefined || logsData === undefined) return;
-      if (scheduleData === null) {
-        setError("Schedule data is unavailable to calculate stats.");
+      // Determine overall loading and error state
+      if (scheduleError || logsError) {
+        setError(scheduleError || logsError || "An error occurred.");
         setIsLoading(false);
         setStats(null);
         return;
       }
+      // If still waiting for any data source (initial undefined state before first fetch)
+      // This part might need refinement depending on how initial undefined state is handled vs null from no data
+      if (scheduleDataInternal === undefined || logsDataInternal === undefined) {
+         // Not an error, just not ready
+         setIsLoading(true); // Keep loading true
+         return;
+      }
+
+      if (scheduleDataInternal === null) {
+        setError(scheduleError || "Schedule data is unavailable to calculate stats.");
+        setIsLoading(false);
+        setStats(null);
+        return;
+      }
+      
+      // If we reach here, all data should be available and valid (or explicitly null)
+      setIsLoading(false); // Data is loaded (or confirmed absent/invalid)
 
       const now = new Date(); 
 
       let calculatedScheduledTodayPast = 0;
       const currentDayIndex = getDay(now);
-      const todayScheduleTimes = scheduleData[currentDayIndex] || [];
+      const todayScheduleTimes = scheduleDataInternal[currentDayIndex] || [];
       for (const timeStr of todayScheduleTimes) {
         const [hour, minute] = timeStr.split(':').map(Number);
         const doseDateTime = setSeconds(setMinutes(setHours(now, hour), minute), 0);
@@ -111,7 +136,7 @@ const MedicationStatsCard: React.FC = () => {
         }
       }
       
-      const takenTodayLogs = logsData.filter(log =>
+      const takenTodayLogs = logsDataInternal.filter(log =>
         log.timestamp >= startOfToday.getTime() && log.timestamp <= endOfToday.getTime()
       ).length;
 
@@ -121,7 +146,7 @@ const MedicationStatsCard: React.FC = () => {
       for (let i = 0; i < 7; i++) { 
         const dayToConsider = subDays(now, i);
         const dayIndexInSchedule = getDay(dayToConsider);
-        const dayScheduleTimesForCalc = scheduleData[dayIndexInSchedule] || [];
+        const dayScheduleTimesForCalc = scheduleDataInternal[dayIndexInSchedule] || [];
 
         for (const timeStr of dayScheduleTimesForCalc) {
           const [hour, minute] = timeStr.split(':').map(Number);
@@ -131,7 +156,7 @@ const MedicationStatsCard: React.FC = () => {
           }
         }
         
-        const dayLogs = logsData.filter(log => {
+        const dayLogs = logsDataInternal.filter(log => {
             const logDate = new Date(log.timestamp);
             return isSameDay(logDate, dayToConsider);
         }).length;
@@ -149,15 +174,16 @@ const MedicationStatsCard: React.FC = () => {
         takenThisWeek: calculatedTakenThisWeek,
         adherenceThisWeek: adherence,
       });
-      setError(null);
-      setIsLoading(false);
+      setError(null); // Clear errors if calculation is successful
     };
     
     return () => {
+      // Firebase SDK's onValue returns a function to unsubscribe.
+      // Call these functions to detach listeners.
       onScheduleValue(); 
       onLogsValue(); 
     };
-  }, [today, startOfToday, endOfToday]);
+  }, [today, startOfToday, endOfToday]); // Dependencies remain the same
 
   const renderStatItem = (label: string, value: string | number, icon?: React.ReactNode) => (
     <div className="flex justify-between items-center py-2 border-b border-border last:border-b-0">
@@ -223,7 +249,7 @@ const MedicationStatsCard: React.FC = () => {
   let AdherenceIconToRender: React.ElementType;
 
   if (stats.adherenceThisWeek === null) {
-    adherenceColorValue = "text-muted-foreground";
+    adherenceColorValue = "text-muted-foreground"; // Default icon for N/A
     AdherenceIconToRender = TrendingUp;
   } else if (stats.adherenceThisWeek >= 80) {
     adherenceColorValue = "text-green-600";
@@ -235,6 +261,7 @@ const MedicationStatsCard: React.FC = () => {
     adherenceColorValue = "text-red-600";
     AdherenceIconToRender = TrendingDown;
   }
+
 
   return (
     <Card className="shadow-md">

@@ -9,7 +9,23 @@ import ScheduleGrid from './ScheduleGrid';
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 
-const initialSchedule: WeekSchedule = Array(7).fill(null).map(() => Array(24).fill(false));
+// Updated initialSchedule
+// Regular: 8 AM, 1 PM, 8 PM
+// Emergency: 12 PM
+const createInitialSchedule = (): WeekSchedule => {
+  const newSchedule: WeekSchedule = [];
+  for (let i = 0; i < 7; i++) {
+    const daySchedule: boolean[] = Array(24).fill(false);
+    daySchedule[8] = true;  // 8 AM
+    daySchedule[12] = true; // 12 PM (Emergency)
+    daySchedule[13] = true; // 1 PM
+    daySchedule[20] = true; // 8 PM
+    newSchedule.push(daySchedule);
+  }
+  return newSchedule;
+};
+
+const initialSchedule: WeekSchedule = createInitialSchedule();
 
 const ScheduleManager: React.FC = () => {
   const [schedule, setSchedule] = useState<WeekSchedule | null>(null);
@@ -108,3 +124,4 @@ const ScheduleManager: React.FC = () => {
 };
 
 export default ScheduleManager;
+

@@ -6,7 +6,7 @@ import ScheduleManager from '@/components/schedule/ScheduleManager';
 import MedicationLogList from '@/components/medication-logs/MedicationLogList';
 import PageTitle from '@/components/shared/PageTitle';
 import { Separator } from '@/components/ui/separator';
-import { LayoutDashboard, BellRing, ClipboardList } from 'lucide-react';
+import { LayoutDashboard } from 'lucide-react';
 import NextMedicationCard from '@/components/dashboard/NextMedicationCard';
 import MedicationStatsCard from '@/components/dashboard/MedicationStatsCard';
 

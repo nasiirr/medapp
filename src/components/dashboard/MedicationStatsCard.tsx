@@ -3,21 +3,23 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { database } from '@/lib/firebase';
-import { ref, onValue, query, orderByChild, startAt, endAt } from 'firebase/database';
-import type { WeekSchedule, MedicationLog } from '@/types';
+import { ref, onValue, query, orderByChild } from 'firebase/database';
+import type { WeekSchedule, MedicationLog, DoseTime } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ClipboardList, AlertCircle, TrendingUp, TrendingDown, CheckCircle } from 'lucide-react';
 import {
   startOfDay,
   endOfDay,
-  isWithinInterval,
   getHours,
+  getMinutes,
   getDay,
   subDays,
-  isBefore,
   isSameDay,
-  parseISO,
+  setHours,
+  setMinutes,
+  setSeconds,
+  isBefore,
 } from 'date-fns';
 
 interface Stats {
@@ -33,20 +35,14 @@ const MedicationStatsCard: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Memoize date ranges to prevent re-calculating on every render
   const today = useMemo(() => new Date(), []);
   const startOfToday = useMemo(() => startOfDay(today), [today]);
   const endOfToday = useMemo(() => endOfDay(today), [today]);
-  const startOfThisWeekPeriod = useMemo(() => startOfDay(subDays(today, 6)), [today]); // Last 7 days including today
 
   useEffect(() => {
     setIsLoading(true);
     const scheduleRef = ref(database, 'schedules');
     const logsRef = ref(database, 'medication_logs');
-
-    // Order logs by timestamp to efficiently query for date ranges
-    // Firebase RTDB queries for ranges on string paths require specific structuring
-    // For numeric timestamps, it's more straightforward.
     const logsQuery = query(logsRef, orderByChild('timestamp'));
 
     let scheduleData: WeekSchedule | null = null;
@@ -55,8 +51,15 @@ const MedicationStatsCard: React.FC = () => {
     const onScheduleValue = onValue(scheduleRef, (scheduleSnapshot) => {
       if (scheduleSnapshot.exists()) {
         const data = scheduleSnapshot.val() as WeekSchedule;
-        if (Array.isArray(data) && data.length === 7 && data.every(day => Array.isArray(day) && day.length === 24)) {
-          scheduleData = data;
+         if (
+          Array.isArray(data) &&
+          data.length === 7 &&
+          data.every(daySchedule =>
+            Array.isArray(daySchedule) &&
+            daySchedule.every(time => typeof time === 'string' && /^\d{2}:\d{2}$/.test(time))
+          )
+        ) {
+          scheduleData = data.map(dayTimes => dayTimes.sort());
         } else {
            console.warn("MedicationStatsCard: Firebase schedule data is malformed.");
            scheduleData = null;
@@ -87,10 +90,7 @@ const MedicationStatsCard: React.FC = () => {
     });
 
     const tryCalculateStats = () => {
-      if (scheduleData === undefined || logsData === undefined) {
-        // Data not yet loaded
-        return;
-      }
+      if (scheduleData === undefined || logsData === undefined) return;
       if (scheduleData === null) {
         setError("Schedule data is unavailable to calculate stats.");
         setIsLoading(false);
@@ -98,15 +98,17 @@ const MedicationStatsCard: React.FC = () => {
         return;
       }
 
-      const currentHour = getHours(today);
-      const currentDayIndex = getDay(today); // Sunday = 0, Monday = 1, ...
+      const now = new Date(); // Use a single `now` for consistency in calculations
 
+      // Calculate for today
       let calculatedScheduledTodayPast = 0;
-      if (scheduleData[currentDayIndex]) {
-        for (let hour = 0; hour < currentHour; hour++) {
-          if (scheduleData[currentDayIndex][hour]) {
-            calculatedScheduledTodayPast++;
-          }
+      const currentDayIndex = getDay(now);
+      const todayScheduleTimes = scheduleData[currentDayIndex] || [];
+      for (const timeStr of todayScheduleTimes) {
+        const [hour, minute] = timeStr.split(':').map(Number);
+        const doseDateTime = setSeconds(setMinutes(setHours(now, hour), minute), 0);
+        if (isBefore(doseDateTime, now)) {
+          calculatedScheduledTodayPast++;
         }
       }
       
@@ -114,21 +116,20 @@ const MedicationStatsCard: React.FC = () => {
         log.timestamp >= startOfToday.getTime() && log.timestamp <= endOfToday.getTime()
       ).length;
 
+      // Calculate for this week (last 7 days)
       let calculatedScheduledThisWeekPast = 0;
       let calculatedTakenThisWeek = 0;
 
-      for (let i = 0; i < 7; i++) { // Iterate over the last 7 days (0 = today, 1 = yesterday, ..., 6 = 6 days ago)
-        const dayToConsider = subDays(today, i);
-        const dayIndexInSchedule = getDay(dayToConsider); // Get the 0-6 index for schedule
-        
-        if (scheduleData[dayIndexInSchedule]) {
-          const hoursInThisDay = scheduleData[dayIndexInSchedule];
-          const relevantHours = isSameDay(dayToConsider, today) ? currentHour : 24; // Only up to current hour for today
+      for (let i = 0; i < 7; i++) { // Iterate over the last 7 days (0 = today, ..., 6 = 6 days ago)
+        const dayToConsider = subDays(now, i);
+        const dayIndexInSchedule = getDay(dayToConsider);
+        const dayScheduleTimesForCalc = scheduleData[dayIndexInSchedule] || [];
 
-          for (let hour = 0; hour < relevantHours; hour++) {
-            if (hoursInThisDay[hour]) {
-              calculatedScheduledThisWeekPast++;
-            }
+        for (const timeStr of dayScheduleTimesForCalc) {
+          const [hour, minute] = timeStr.split(':').map(Number);
+          const doseDateTime = setSeconds(setMinutes(setHours(dayToConsider, hour), minute), 0);
+          if (isBefore(doseDateTime, now)) { // Only count if dose time is in the past relative to current moment
+            calculatedScheduledThisWeekPast++;
           }
         }
         
@@ -141,7 +142,7 @@ const MedicationStatsCard: React.FC = () => {
       
       const adherence = calculatedScheduledThisWeekPast > 0
         ? Math.round((calculatedTakenThisWeek / calculatedScheduledThisWeekPast) * 100)
-        : null; // Avoid division by zero, null if no past scheduled doses
+        : null;
 
       setStats({
         scheduledTodayPast: calculatedScheduledTodayPast,
@@ -150,18 +151,15 @@ const MedicationStatsCard: React.FC = () => {
         takenThisWeek: calculatedTakenThisWeek,
         adherenceThisWeek: adherence,
       });
-      setError(null); // Clear previous errors if successful
+      setError(null);
       setIsLoading(false);
     };
     
-    // Initial call in case data is already cached or loads very fast
-    // tryCalculateStats(); 
-
     return () => {
-      onScheduleValue(); // Detach listener
-      onLogsValue(); // Detach listener
+      onScheduleValue(); 
+      onLogsValue(); 
     };
-  }, [today, startOfToday, endOfToday, startOfThisWeekPeriod]); // Rerun if date ranges change (e.g. day changes)
+  }, [today, startOfToday, endOfToday]); // Simplified dependencies
 
   const renderStatItem = (label: string, value: string | number, icon?: React.ReactNode) => (
     <div className="flex justify-between items-center py-2 border-b border-border last:border-b-0">
@@ -217,7 +215,7 @@ const MedicationStatsCard: React.FC = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground">No statistics available yet.</p>
+          <p className="text-muted-foreground">No statistics available yet or schedule is empty.</p>
         </CardContent>
       </Card>
     );
@@ -232,18 +230,17 @@ const MedicationStatsCard: React.FC = () => {
                         stats.adherenceThisWeek >= 50 ? TrendingUp :
                         TrendingDown;
 
-
   return (
     <Card className="shadow-md">
       <CardHeader>
         <CardTitle className="text-xl font-headline flex items-center">
           <ClipboardList className="mr-2 h-5 w-5 text-primary" />
           Medication Statistics
-        </CardTitle>
+        </Title>
       </CardHeader>
       <CardContent>
-        {renderStatItem("Today - Taken / Scheduled (Past Hours):", `${stats.takenToday} / ${stats.scheduledTodayPast}`)}
-        {renderStatItem("This Week (Last 7 Days) - Taken / Scheduled (Past Slots):", `${stats.takenThisWeek} / ${stats.scheduledThisWeekPast}`)}
+        {renderStatItem("Today - Taken / Scheduled (Past Doses):", `${stats.takenToday} / ${stats.scheduledTodayPast}`)}
+        {renderStatItem("This Week (Last 7 Days) - Taken / Scheduled (Past Doses):", `${stats.takenThisWeek} / ${stats.scheduledThisWeekPast}`)}
         {renderStatItem(
           "This Week - Adherence:",
           stats.adherenceThisWeek !== null ? `${stats.adherenceThisWeek}%` : "N/A",

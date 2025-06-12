@@ -5,7 +5,8 @@ import React, { useState, useEffect } from 'react';
 import type { WeekSchedule, DoseTime } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+// import { Input } from '@/components/ui/input'; // No longer needed
+import CustomTimePicker from './CustomTimePicker'; // Import the new component
 import { Badge } from '@/components/ui/badge';
 import { Clock, PlusCircle, X, Save } from 'lucide-react';
 import { Skeleton } from "@/components/ui/skeleton";
@@ -29,13 +30,13 @@ const ScheduleEditor: React.FC<ScheduleEditorProps> = ({
   isSaving,
   isScheduleLoading,
 }) => {
-  const [newTimeInputs, setNewTimeInputs] = useState<string[]>(Array(7).fill(''));
-  const [currentDayOriginalIndex, setCurrentDayOriginalIndex] = useState(0); // 0 for Sun, ..., 6 for Sat
+  const [newTimeInputs, setNewTimeInputs] = useState<string[]>(Array(7).fill("00:00")); // Default to "00:00"
+  const [currentDayOriginalIndex, setCurrentDayOriginalIndex] = useState(0); 
   const [orderedDisplayDays, setOrderedDisplayDays] = useState<string[]>(baseDaysOfWeek);
   const [orderedDisplaySchedule, setOrderedDisplaySchedule] = useState<WeekSchedule | null>(null);
 
   useEffect(() => {
-    const todaySystemIndex = new Date().getDay(); // 0 for Sunday, ..., 6 for Saturday
+    const todaySystemIndex = new Date().getDay(); 
     setCurrentDayOriginalIndex(todaySystemIndex);
 
     const newOrderedDays = [...baseDaysOfWeek.slice(todaySystemIndex), ...baseDaysOfWeek.slice(0, todaySystemIndex)];
@@ -62,20 +63,16 @@ const ScheduleEditor: React.FC<ScheduleEditorProps> = ({
 
   const handleAddTimeDose = (originalDayIdx: number) => {
     const timeToAdd = newTimeInputs[originalDayIdx];
-    if (timeToAdd) {
-      onAddDose(originalDayIdx, timeToAdd);
-      // Optionally clear the input after adding
-      // handleNewTimeInputChange(originalDayIdx, ''); 
-    }
+    // CustomTimePicker ensures timeToAdd is always valid "HH:MM"
+    onAddDose(originalDayIdx, timeToAdd);
+    // Optionally reset input for that day to "00:00" after adding, or leave as is
+    // For now, leave as is, so user can add slight variations easily.
+    // handleNewTimeInputChange(originalDayIdx, "00:00"); 
   };
   
   const handleRemoveWrapper = (displayedDayIdx: number, timeIndex: number) => {
     if (!orderedDisplaySchedule) return;
     const originalDayIndex = (currentDayOriginalIndex + displayedDayIdx) % 7;
-    // The timeIndex is already correct for the `orderedDisplaySchedule[displayedDayIdx]`
-    // We need to find the actual index in the original `schedule` if onRemoveDose expects original indices,
-    // but it's simpler if onRemoveDose takes originalDayIndex and timeIndex within that day's original (sorted) array.
-    // Given current `ScheduleManager`'s `handleRemoveDose` expects index within `schedule[originalDayIndex]`, this is fine.
     onRemoveDose(originalDayIndex, timeIndex);
   };
 
@@ -128,6 +125,7 @@ const ScheduleEditor: React.FC<ScheduleEditorProps> = ({
             {orderedDisplayDays.map((dayName, displayedDayIdx) => {
               const originalDayIndex = (currentDayOriginalIndex + displayedDayIdx) % 7;
               const dayScheduleTimes = orderedDisplaySchedule[displayedDayIdx] || [];
+              const timeInputId = `time-picker-${originalDayIndex}`;
 
               return (
                 <Card key={originalDayIndex} className="bg-background/50">
@@ -155,14 +153,13 @@ const ScheduleEditor: React.FC<ScheduleEditorProps> = ({
                         ))}
                       </div>
                     )}
-                    <div className="mt-4 flex items-center gap-2">
-                      <Input
-                        type="time"
+                    <div className="mt-4 flex flex-col sm:flex-row items-center gap-2">
+                      <CustomTimePicker
+                        id={timeInputId}
                         value={newTimeInputs[originalDayIndex]}
-                        onChange={(e) => handleNewTimeInputChange(originalDayIndex, e.target.value)}
-                        aria-label={`New dose time for ${dayName}`}
+                        onChange={(newTime) => handleNewTimeInputChange(originalDayIndex, newTime)}
                       />
-                      <Button onClick={() => handleAddTimeDose(originalDayIndex)} variant="outline">
+                      <Button onClick={() => handleAddTimeDose(originalDayIndex)} variant="outline" className="w-full sm:w-auto">
                         <PlusCircle className="mr-2 h-4 w-4" /> Add Dose
                       </Button>
                     </div>

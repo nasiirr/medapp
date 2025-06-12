@@ -98,9 +98,8 @@ const MedicationStatsCard: React.FC = () => {
         return;
       }
 
-      const now = new Date(); // Use a single `now` for consistency in calculations
+      const now = new Date(); 
 
-      // Calculate for today
       let calculatedScheduledTodayPast = 0;
       const currentDayIndex = getDay(now);
       const todayScheduleTimes = scheduleData[currentDayIndex] || [];
@@ -116,11 +115,10 @@ const MedicationStatsCard: React.FC = () => {
         log.timestamp >= startOfToday.getTime() && log.timestamp <= endOfToday.getTime()
       ).length;
 
-      // Calculate for this week (last 7 days)
       let calculatedScheduledThisWeekPast = 0;
       let calculatedTakenThisWeek = 0;
 
-      for (let i = 0; i < 7; i++) { // Iterate over the last 7 days (0 = today, ..., 6 = 6 days ago)
+      for (let i = 0; i < 7; i++) { 
         const dayToConsider = subDays(now, i);
         const dayIndexInSchedule = getDay(dayToConsider);
         const dayScheduleTimesForCalc = scheduleData[dayIndexInSchedule] || [];
@@ -128,7 +126,7 @@ const MedicationStatsCard: React.FC = () => {
         for (const timeStr of dayScheduleTimesForCalc) {
           const [hour, minute] = timeStr.split(':').map(Number);
           const doseDateTime = setSeconds(setMinutes(setHours(dayToConsider, hour), minute), 0);
-          if (isBefore(doseDateTime, now)) { // Only count if dose time is in the past relative to current moment
+          if (isBefore(doseDateTime, now)) { 
             calculatedScheduledThisWeekPast++;
           }
         }
@@ -159,7 +157,7 @@ const MedicationStatsCard: React.FC = () => {
       onScheduleValue(); 
       onLogsValue(); 
     };
-  }, [today, startOfToday, endOfToday]); // Simplified dependencies
+  }, [today, startOfToday, endOfToday]);
 
   const renderStatItem = (label: string, value: string | number, icon?: React.ReactNode) => (
     <div className="flex justify-between items-center py-2 border-b border-border last:border-b-0">
@@ -221,14 +219,22 @@ const MedicationStatsCard: React.FC = () => {
     );
   }
   
-  const adherenceColor = stats.adherenceThisWeek === null ? "text-muted-foreground" :
-                         stats.adherenceThisWeek >= 80 ? "text-green-600" :
-                         stats.adherenceThisWeek >= 50 ? "text-yellow-600" :
-                         "text-red-600";
-  const AdherenceIcon = stats.adherenceThisWeek === null ? TrendingUp :
-                        stats.adherenceThisWeek >= 80 ? CheckCircle :
-                        stats.adherenceThisWeek >= 50 ? TrendingUp :
-                        TrendingDown;
+  let adherenceColorValue: string;
+  let AdherenceIconToRender: React.ElementType;
+
+  if (stats.adherenceThisWeek === null) {
+    adherenceColorValue = "text-muted-foreground";
+    AdherenceIconToRender = TrendingUp;
+  } else if (stats.adherenceThisWeek >= 80) {
+    adherenceColorValue = "text-green-600";
+    AdherenceIconToRender = CheckCircle;
+  } else if (stats.adherenceThisWeek >= 50) {
+    adherenceColorValue = "text-yellow-600";
+    AdherenceIconToRender = TrendingUp;
+  } else {
+    adherenceColorValue = "text-red-600";
+    AdherenceIconToRender = TrendingDown;
+  }
 
   return (
     <Card className="shadow-md">
@@ -236,7 +242,7 @@ const MedicationStatsCard: React.FC = () => {
         <CardTitle className="text-xl font-headline flex items-center">
           <ClipboardList className="mr-2 h-5 w-5 text-primary" />
           Medication Statistics
-        </Title>
+        </CardTitle>
       </CardHeader>
       <CardContent>
         {renderStatItem("Today - Taken / Scheduled (Past Doses):", `${stats.takenToday} / ${stats.scheduledTodayPast}`)}
@@ -244,7 +250,7 @@ const MedicationStatsCard: React.FC = () => {
         {renderStatItem(
           "This Week - Adherence:",
           stats.adherenceThisWeek !== null ? `${stats.adherenceThisWeek}%` : "N/A",
-          <AdherenceIcon className={`h-4 w-4 ${adherenceColor}`} />
+          <AdherenceIconToRender className={`h-4 w-4 ${adherenceColorValue}`} />
         )}
       </CardContent>
     </Card>

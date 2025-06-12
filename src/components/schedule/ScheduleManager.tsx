@@ -28,40 +28,46 @@ const ScheduleManager: React.FC = () => {
     setIsLoadingData(true);
 
     const unsubscribe = onValue(scheduleRef, async (snapshot) => {
+      let finalSchedule: WeekSchedule;
       if (snapshot.exists()) {
         const rawData = snapshot.val();
-        const convertedData = ensureScheduleArray(rawData);
+        let baseSchedule = ensureScheduleArray(rawData); 
 
-        if (
-          convertedData && // Check if conversion was successful and data is not null
-          convertedData.length === 7 &&
-          convertedData.every(daySchedule =>
-            Array.isArray(daySchedule) && // This check is a bit redundant if ensureScheduleArray guarantees it
-            daySchedule.every(time => typeof time === 'string' && /^\d{2}:\d{2}$/.test(time))
-          )
-        ) {
-          setSchedule(convertedData.map(dayTimes => dayTimes.sort()));
+        if (baseSchedule && baseSchedule.length === 7) {
+          finalSchedule = baseSchedule.map(dayTimes => {
+            let times = Array.isArray(dayTimes)
+              ? dayTimes.filter(t => typeof t === 'string' && /^\d{2}:\d{2}$/.test(t))
+              : [];
+            
+            times.sort();
+
+            const normalizedDayTimes: DoseTime[] = [];
+            for (let i = 0; i < 4; i++) {
+              normalizedDayTimes.push(times[i] || "00:00"); 
+            }
+            return normalizedDayTimes.sort(); 
+          });
         } else {
-          console.warn("Firebase schedule data is malformed or incompatible. Resetting to default. Raw data:", rawData);
-          setSchedule(initialSchedule);
+          console.warn("Firebase schedule data is malformed or not a 7-day array. Resetting to default.", rawData);
+          finalSchedule = createInitialSchedule();
           try {
-            await set(scheduleRef, initialSchedule);
-            toast({ title: "Schedule Corrected", description: "Schedule data was incompatible and has been reset to default." });
+            await set(scheduleRef, finalSchedule);
+            toast({ title: "Schedule Corrected", description: "Schedule data was incompatible and has been reset." });
           } catch (e) {
-            console.error("Failed to set corrected initial schedule in Firebase:", e);
-            // Don't toast here as it might conflict with other error toasts
+            console.error("Failed to set corrected schedule in Firebase:", e);
           }
         }
       } else {
-        setSchedule(initialSchedule);
+        finalSchedule = createInitialSchedule();
         try {
-          await set(scheduleRef, initialSchedule);
+          await set(scheduleRef, finalSchedule);
           toast({ title: "Schedule Initialized", description: "Default medication schedule has been set." });
         } catch (e) {
           console.error("Failed to set initial schedule in Firebase:", e);
           toast({ variant: "destructive", title: "Error", description: "Failed to initialize schedule in Firebase." });
         }
       }
+      setSchedule(finalSchedule);
       setIsLoadingData(false);
     }, (err) => {
       console.error("Firebase onValue error:", err);
@@ -73,31 +79,23 @@ const ScheduleManager: React.FC = () => {
     return () => unsubscribe();
   }, [toast]);
 
-  const handleAddDose = useCallback((dayIndex: number, time: DoseTime) => {
-    if (!/^\d{2}:\d{2}$/.test(time)) {
-      toast({ variant: "destructive", title: "Invalid Time", description: "Please enter time in HH:MM format." });
+  const handleEditDoseTime = useCallback((dayIndex: number, doseSlotIndex: number, newTime: DoseTime) => {
+    if (!/^\d{2}:\d{2}$/.test(newTime)) {
+      toast({ variant: "destructive", title: "Invalid Time", description: "Time format is incorrect (HH:MM)." });
       return;
     }
     setSchedule(prevSchedule => {
-      if (!prevSchedule) return null; // Should ideally not happen if loading state is managed
+      if (!prevSchedule) return null;
       const newSchedule = prevSchedule.map(day => [...day]);
-      if (!newSchedule[dayIndex].includes(time)) {
-        newSchedule[dayIndex] = [...newSchedule[dayIndex], time].sort();
+      if (newSchedule[dayIndex] && newSchedule[dayIndex][doseSlotIndex] !== undefined) {
+        newSchedule[dayIndex][doseSlotIndex] = newTime;
+        newSchedule[dayIndex] = [...newSchedule[dayIndex]].sort(); 
       } else {
-        toast({ title: "Duplicate Time", description: "This time is already scheduled for this day." });
+         console.warn(`Attempted to edit non-existent slot: day ${dayIndex}, slot ${doseSlotIndex}`);
       }
       return newSchedule;
     });
   }, [toast]);
-
-  const handleRemoveDose = useCallback((dayIndex: number, timeIndex: number) => {
-    setSchedule(prevSchedule => {
-      if (!prevSchedule) return null;
-      const newSchedule = prevSchedule.map(day => [...day]);
-      newSchedule[dayIndex].splice(timeIndex, 1);
-      return newSchedule;
-    });
-  }, []);
 
   const handleSaveSchedule = async () => {
     if (!schedule) {
@@ -108,9 +106,8 @@ const ScheduleManager: React.FC = () => {
     setError(null);
     try {
       const scheduleRef = ref(database, 'schedules');
-      const sortedSchedule = schedule.map(dayTimes => [...dayTimes].sort());
-      await set(scheduleRef, sortedSchedule);
-      setSchedule(sortedSchedule); 
+      // Schedule state should already be normalized (4 slots per day, sorted)
+      await set(scheduleRef, schedule);
       toast({ title: "Schedule Saved", description: "Your medication schedule has been updated successfully.", className: "bg-accent text-accent-foreground" });
     } catch (e) {
       console.error("Failed to save schedule:", e);
@@ -128,8 +125,7 @@ const ScheduleManager: React.FC = () => {
   return (
     <ScheduleEditor
       schedule={schedule}
-      onAddDose={handleAddDose}
-      onRemoveDose={handleRemoveDose}
+      onEditDoseTime={handleEditDoseTime}
       onSave={handleSaveSchedule}
       isSaving={isSaving}
       isScheduleLoading={isLoadingData}

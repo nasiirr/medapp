@@ -78,7 +78,7 @@ const MedicationStatsCard: React.FC = () => {
     }, (err) => {
       console.error("Firebase onValue error for schedule in MedicationStatsCard:", err);
       scheduleError = "Failed to load schedule data.";
-      tryCalculateStats(); // Attempt calculation even if one source fails to update loading/error state
+      tryCalculateStats(); 
     });
 
     const onLogsValue = onValue(logsQuery, (logsSnapshot) => {
@@ -98,18 +98,15 @@ const MedicationStatsCard: React.FC = () => {
     });
 
     const tryCalculateStats = () => {
-      // Determine overall loading and error state
       if (scheduleError || logsError) {
-        setError(scheduleError || logsError || "An error occurred.");
+        setError(scheduleError || logsError || "An error occurred calculating stats.");
         setIsLoading(false);
         setStats(null);
         return;
       }
-      // If still waiting for any data source (initial undefined state before first fetch)
-      // This part might need refinement depending on how initial undefined state is handled vs null from no data
+      
       if (scheduleDataInternal === undefined || logsDataInternal === undefined) {
-         // Not an error, just not ready
-         setIsLoading(true); // Keep loading true
+         setIsLoading(true); 
          return;
       }
 
@@ -120,8 +117,7 @@ const MedicationStatsCard: React.FC = () => {
         return;
       }
       
-      // If we reach here, all data should be available and valid (or explicitly null)
-      setIsLoading(false); // Data is loaded (or confirmed absent/invalid)
+      setIsLoading(false); 
 
       const now = new Date(); 
 
@@ -129,6 +125,10 @@ const MedicationStatsCard: React.FC = () => {
       const currentDayIndex = getDay(now);
       const todayScheduleTimes = scheduleDataInternal[currentDayIndex] || [];
       for (const timeStr of todayScheduleTimes) {
+        if (typeof timeStr !== 'string' || !/^\d{2}:\d{2}$/.test(timeStr)) {
+          console.warn(`MedicationStatsCard: Invalid time_str '${String(timeStr)}' (type: ${typeof timeStr}) in schedule for day ${currentDayIndex} (today's calculation). Skipping. Full schedule:`, JSON.stringify(scheduleDataInternal));
+          continue;
+        }
         const [hour, minute] = timeStr.split(':').map(Number);
         const doseDateTime = setSeconds(setMinutes(setHours(now, hour), minute), 0);
         if (isBefore(doseDateTime, now)) {
@@ -149,6 +149,10 @@ const MedicationStatsCard: React.FC = () => {
         const dayScheduleTimesForCalc = scheduleDataInternal[dayIndexInSchedule] || [];
 
         for (const timeStr of dayScheduleTimesForCalc) {
+          if (typeof timeStr !== 'string' || !/^\d{2}:\d{2}$/.test(timeStr)) {
+            console.warn(`MedicationStatsCard: Invalid time_str '${String(timeStr)}' (type: ${typeof timeStr}) in schedule for day ${dayIndexInSchedule} (week calculation). Skipping. Full schedule:`, JSON.stringify(scheduleDataInternal));
+            continue;
+          }
           const [hour, minute] = timeStr.split(':').map(Number);
           const doseDateTime = setSeconds(setMinutes(setHours(dayToConsider, hour), minute), 0);
           if (isBefore(doseDateTime, now)) { 
@@ -174,16 +178,14 @@ const MedicationStatsCard: React.FC = () => {
         takenThisWeek: calculatedTakenThisWeek,
         adherenceThisWeek: adherence,
       });
-      setError(null); // Clear errors if calculation is successful
+      setError(null); 
     };
     
     return () => {
-      // Firebase SDK's onValue returns a function to unsubscribe.
-      // Call these functions to detach listeners.
       onScheduleValue(); 
       onLogsValue(); 
     };
-  }, [today, startOfToday, endOfToday]); // Dependencies remain the same
+  }, [today, startOfToday, endOfToday]); 
 
   const renderStatItem = (label: string, value: string | number, icon?: React.ReactNode) => (
     <div className="flex justify-between items-center py-2 border-b border-border last:border-b-0">
@@ -249,7 +251,7 @@ const MedicationStatsCard: React.FC = () => {
   let AdherenceIconToRender: React.ElementType;
 
   if (stats.adherenceThisWeek === null) {
-    adherenceColorValue = "text-muted-foreground"; // Default icon for N/A
+    adherenceColorValue = "text-muted-foreground"; 
     AdherenceIconToRender = TrendingUp;
   } else if (stats.adherenceThisWeek >= 80) {
     adherenceColorValue = "text-green-600";

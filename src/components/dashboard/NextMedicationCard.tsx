@@ -41,7 +41,6 @@ const NextMedicationCard: React.FC = () => {
           convertedData &&
           convertedData.length === 7 &&
           convertedData.every(daySchedule =>
-            // ensureScheduleArray should guarantee daySchedule is an array if convertedData is not null
             Array.isArray(daySchedule) && 
             daySchedule.every(time => typeof time === 'string' && /^\d{2}:\d{2}$/.test(time))
           )
@@ -67,12 +66,12 @@ const NextMedicationCard: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (isLoading) { // If still loading from Firebase, wait
-        setNextDoseString(null); // Clear any old dose string
+    if (isLoading) { 
+        setNextDoseString(null); 
         return;
     }
-    if (error || !schedule) { // If there's an error or no schedule (even after loading)
-        setNextDoseString(null); // Error message is handled by render, clear dose string
+    if (error || !schedule) { 
+        setNextDoseString(null); 
         return;
     }
 
@@ -86,6 +85,12 @@ const NextMedicationCard: React.FC = () => {
       if (!dayScheduleTimes || dayScheduleTimes.length === 0) continue;
 
       for (const timeStr of dayScheduleTimes) { 
+        if (typeof timeStr !== 'string' || !/^\d{2}:\d{2}$/.test(timeStr)) {
+          console.warn(`NextMedicationCard: Invalid time_str '${String(timeStr)}' (type: ${typeof timeStr}) in schedule for day ${dayIndex}. Skipping. Full schedule:`, JSON.stringify(schedule));
+          // Avoid setting error here to prevent potential loops if error is a dependency,
+          // as the main data validation error should be caught during schedule loading.
+          continue;
+        }
         const [hour, minute] = timeStr.split(':').map(Number);
         let doseDateTime = setSeconds(setMinutes(setHours(currentDateToCheck, hour), minute), 0);
         

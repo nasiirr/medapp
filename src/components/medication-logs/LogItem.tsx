@@ -1,3 +1,4 @@
+
 "use client";
 
 import type React from 'react';
@@ -11,6 +12,14 @@ interface LogItemProps {
 }
 
 const LogItem: React.FC<LogItemProps> = ({ log }) => {
+  let formattedTimestamp = "Invalid Date";
+  if (typeof log.timestamp === 'number' && !isNaN(log.timestamp)) {
+    const date = new Date(log.timestamp);
+    if (!isNaN(date.getTime())) {
+      formattedTimestamp = format(date, 'MMM d, yyyy HH:mm:ss');
+    }
+  }
+
   return (
     <TableRow className="transition-colors hover:bg-muted/30">
       <TableCell>
@@ -22,7 +31,7 @@ const LogItem: React.FC<LogItemProps> = ({ log }) => {
       <TableCell>
         <div className="flex items-center gap-2">
           <CalendarDays className="h-5 w-5 text-muted-foreground" />
-          <span>{log.readable_time} ({format(new Date(log.timestamp), 'MMM d, yyyy HH:mm:ss')})</span>
+          <span>{log.readable_time} ({formattedTimestamp})</span>
         </div>
       </TableCell>
       <TableCell>

@@ -18,6 +18,7 @@ interface ScheduleEditorProps {
 }
 
 const baseDaysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const doseSlotLabels = ["Morning Dose", "Afternoon Dose", "Night Dose", "Optional/Emergency Dose"];
 
 const ScheduleEditor: React.FC<ScheduleEditorProps> = ({
   schedule,
@@ -40,12 +41,11 @@ const ScheduleEditor: React.FC<ScheduleEditorProps> = ({
     if (schedule) {
       const newOrderedScheduleData: WeekSchedule = [];
       for (let i = 0; i < 7; i++) {
-        // Ensure schedule[(todaySystemIndex + i) % 7] exists and is an array of 4
         const daySchedule = schedule[(todaySystemIndex + i) % 7];
         newOrderedScheduleData.push(
           Array.isArray(daySchedule) && daySchedule.length === 4 
             ? daySchedule 
-            : ["00:00", "00:00", "00:00", "00:00"] // Fallback if structure is off
+            : ["00:00", "00:00", "00:00", "00:00"] 
         );
       }
       setOrderedDisplaySchedule(newOrderedScheduleData);
@@ -90,7 +90,7 @@ const ScheduleEditor: React.FC<ScheduleEditorProps> = ({
             <Clock className="mr-2 h-6 w-6 text-primary" />
             Medication Schedule
           </CardTitle>
-          <CardDescription>Set precise times for your four daily medication slots. Times are auto-sorted.</CardDescription>
+          <CardDescription>Set precise times for your four daily medication slots. Times are auto-sorted after editing.</CardDescription>
         </div>
         <Button onClick={onSave} disabled={isSaving || !schedule} size="lg">
           {isSaving ? 'Saving...' : <><Save className="mr-2 h-5 w-5" /> Save Schedule</>}
@@ -113,12 +113,13 @@ const ScheduleEditor: React.FC<ScheduleEditorProps> = ({
                   <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                     {dayScheduleTimes.map((time, doseSlotIndex) => {
                        const timePickerId = `time-picker-${originalDayIndex}-${doseSlotIndex}`;
+                       const labelText = doseSlotLabels[doseSlotIndex] || `Dose ${doseSlotIndex + 1}`;
                        return (
                         <div key={doseSlotIndex} className="flex flex-col items-start gap-1 p-2 border rounded-md bg-card/80">
-                           <label htmlFor={timePickerId} className="text-sm font-medium text-muted-foreground ml-1">Dose {doseSlotIndex + 1}</label>
+                           <label htmlFor={timePickerId} className="text-sm font-medium text-muted-foreground ml-1">{labelText}</label>
                            <CustomTimePicker
                              id={timePickerId}
-                             value={time} // This should be one of the 4 times for the day
+                             value={time}
                              onChange={(newTime) => onEditDoseTime(originalDayIndex, doseSlotIndex, newTime)}
                            />
                          </div>

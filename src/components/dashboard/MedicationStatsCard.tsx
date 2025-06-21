@@ -41,6 +41,12 @@ const MedicationStatsCard: React.FC = () => {
   const endOfToday = useMemo(() => endOfDay(today), [today]);
 
   useEffect(() => {
+    if (!database) {
+      setError("Firebase is not configured. Cannot load medication stats.");
+      setIsLoading(false);
+      return;
+    }
+    
     setIsLoading(true);
     const scheduleRef = ref(database, 'schedules');
     const logsRef = ref(database, 'medication_logs');

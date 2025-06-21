@@ -24,6 +24,11 @@ const ScheduleManager: React.FC = () => {
   const { toast } = useToast();
 
   useEffect(() => {
+    if (!database) {
+      setError("Firebase not configured. Cannot manage schedule.");
+      setIsLoadingData(false);
+      return;
+    }
     const scheduleRef = ref(database, 'schedules');
     setIsLoadingData(true);
 
@@ -100,6 +105,10 @@ const ScheduleManager: React.FC = () => {
   const handleSaveSchedule = async () => {
     if (!schedule) {
       toast({ variant: "destructive", title: "Error", description: "No schedule data to save." });
+      return;
+    }
+    if (!database) {
+      toast({ variant: "destructive", title: "Error", description: "Firebase not configured. Cannot save." });
       return;
     }
     setIsSaving(true);

@@ -19,6 +19,11 @@ const MedicationLogList: React.FC = () => {
   const { toast } = useToast();
 
   useEffect(() => {
+    if (!database) {
+      setError("Firebase not configured. Cannot load logs.");
+      setIsLoading(false);
+      return;
+    }
     const logsRef = ref(database, 'medication_logs');
     // Query to order logs by timestamp. Firebase RTDB sorts numbers in ascending order.
     // We will reverse client-side for descending order.

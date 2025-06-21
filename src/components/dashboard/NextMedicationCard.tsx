@@ -30,6 +30,11 @@ const NextMedicationCard: React.FC = () => {
   const now = useMemo(() => new Date(), []);
 
   useEffect(() => {
+    if (!database) {
+      setError("Firebase is not configured. Cannot load schedule.");
+      setIsLoading(false);
+      return;
+    }
     const scheduleRef = ref(database, 'schedules');
     const unsubscribe = onValue(scheduleRef, (snapshot) => {
       setIsLoading(true); // Set loading true at the start of data processing

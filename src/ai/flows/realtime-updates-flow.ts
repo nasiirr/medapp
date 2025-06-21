@@ -41,23 +41,23 @@ const prompt = ai.definePrompt({
   Here's how to implement real-time updates using Firebase Realtime Database listeners in a Next.js component:
 
   1.  **Import necessary Firebase modules:**
-      -   Import the Firebase Realtime Database modules (`getDatabase`, `ref`, `onValue`) from the Firebase SDK.
+      -   Import the Firebase Realtime Database modules ('getDatabase', 'ref', 'onValue') from the Firebase SDK.
   2.  **Initialize Firebase (if not already initialized):**
       -   Make sure Firebase is initialized in your Next.js app. This usually involves setting up the Firebase configuration and initializing the Firebase app.
   3.  **Create a Realtime Database Reference:**
-      -   Use `getDatabase()` to get the Realtime Database instance.
-      -   Use `ref()` to create a reference to the specific location in the database where your schedules and medication logs are stored.
+      -   Use 'getDatabase()' to get the Realtime Database instance.
+      -   Use 'ref()' to create a reference to the specific location in the database where your schedules and medication logs are stored.
   4.  **Attach Real-time Listeners:**
-      -   Use the `onValue()` function to listen for changes at the specified database reference.
+      -   Use the 'onValue()' function to listen for changes at the specified database reference.
       -   This function takes a reference and a callback function.
       -   The callback function is executed whenever the data at the reference changes.
   5.  **Update the UI:**
       -   Inside the callback function, update the component's state with the new data received from Firebase.
-      -   Use the `useState` hook to manage the component's state.
+      -   Use the 'useState' hook to manage the component's state.
       -   When the state is updated, the component will automatically re-render with the new data.
   6.  **Handle Disconnections:**
       -   To avoid memory leaks, detach the listeners when the component unmounts.
-      -   You can use the `useEffect` hook with a cleanup function to achieve this.
+      -   You can use the 'useEffect' hook with a cleanup function to achieve this.
   7.  **Error Handling:**
       -   Implement error handling to catch any errors that may occur during the real-time updates process.
       -   Display error messages to the user if necessary.
@@ -135,7 +135,7 @@ const realtimeUpdatesFlow = ai.defineFlow(
     outputSchema: RealtimeUpdatesOutputSchema,
   },
   async input => {
-    const {output} = await prompt(input);
-    return output!;
-  }
+  const { output } = await prompt(input);
+  return output!;
+}
 );

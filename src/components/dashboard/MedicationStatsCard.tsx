@@ -51,52 +51,6 @@ const MedicationStatsCard: React.FC = () => {
     let scheduleError: string | null = null;
     let logsError: string | null = null;
 
-    const onScheduleValue = onValue(scheduleRef, (scheduleSnapshot) => {
-      if (scheduleSnapshot.exists()) {
-        const rawData = scheduleSnapshot.val();
-        const convertedData = ensureScheduleArray(rawData);
-        if (
-          convertedData &&
-          convertedData.length === 7 &&
-          convertedData.every(daySchedule => 
-            Array.isArray(daySchedule) && 
-            daySchedule.every(time => typeof time === 'string' && /^\d{2}:\d{2}$/.test(time))
-          )
-        ) {
-          scheduleDataInternal = convertedData.map(dayTimes => dayTimes.sort());
-          scheduleError = null;
-        } else {
-          console.warn("MedicationStatsCard: Firebase schedule data is malformed or incompatible. Raw data:", rawData);
-          scheduleDataInternal = null;
-          scheduleError = "Schedule data is invalid.";
-        }
-      } else {
-        scheduleDataInternal = null;
-        scheduleError = "No schedule data found.";
-      }
-      tryCalculateStats();
-    }, (err) => {
-      console.error("Firebase onValue error for schedule in MedicationStatsCard:", err);
-      scheduleError = "Failed to load schedule data.";
-      tryCalculateStats(); 
-    });
-
-    const onLogsValue = onValue(logsQuery, (logsSnapshot) => {
-      const allLogs: MedicationLog[] = [];
-      if (logsSnapshot.exists()) {
-        logsSnapshot.forEach((childSnapshot) => {
-          allLogs.push({ id: childSnapshot.key!, ...childSnapshot.val() });
-        });
-      }
-      logsDataInternal = allLogs;
-      logsError = null;
-      tryCalculateStats();
-    }, (err) => {
-      console.error("Firebase onValue error for logs in MedicationStatsCard:", err);
-      logsError = "Failed to load medication logs.";
-      tryCalculateStats();
-    });
-
     const tryCalculateStats = () => {
       if (scheduleError || logsError) {
         setError(scheduleError || logsError || "An error occurred calculating stats.");
@@ -180,10 +134,56 @@ const MedicationStatsCard: React.FC = () => {
       });
       setError(null); 
     };
+
+    const unsubscribeSchedule = onValue(scheduleRef, (scheduleSnapshot) => {
+      if (scheduleSnapshot.exists()) {
+        const rawData = scheduleSnapshot.val();
+        const convertedData = ensureScheduleArray(rawData);
+        if (
+          convertedData &&
+          convertedData.length === 7 &&
+          convertedData.every(daySchedule => 
+            Array.isArray(daySchedule) && 
+            daySchedule.every(time => typeof time === 'string' && /^\d{2}:\d{2}$/.test(time))
+          )
+        ) {
+          scheduleDataInternal = convertedData.map(dayTimes => dayTimes.sort());
+          scheduleError = null;
+        } else {
+          console.warn("MedicationStatsCard: Firebase schedule data is malformed or incompatible. Raw data:", rawData);
+          scheduleDataInternal = null;
+          scheduleError = "Schedule data is invalid.";
+        }
+      } else {
+        scheduleDataInternal = null;
+        scheduleError = "No schedule data found.";
+      }
+      tryCalculateStats();
+    }, (err) => {
+      console.error("Firebase onValue error for schedule in MedicationStatsCard:", err);
+      scheduleError = "Failed to load schedule data.";
+      tryCalculateStats(); 
+    });
+
+    const unsubscribeLogs = onValue(logsQuery, (logsSnapshot) => {
+      const allLogs: MedicationLog[] = [];
+      if (logsSnapshot.exists()) {
+        logsSnapshot.forEach((childSnapshot) => {
+          allLogs.push({ id: childSnapshot.key!, ...childSnapshot.val() });
+        });
+      }
+      logsDataInternal = allLogs;
+      logsError = null;
+      tryCalculateStats();
+    }, (err) => {
+      console.error("Firebase onValue error for logs in MedicationStatsCard:", err);
+      logsError = "Failed to load medication logs.";
+      tryCalculateStats();
+    });
     
     return () => {
-      onScheduleValue(); 
-      onLogsValue(); 
+      unsubscribeSchedule(); 
+      unsubscribeLogs(); 
     };
   }, [today, startOfToday, endOfToday]); 
 

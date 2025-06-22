@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -27,14 +28,18 @@ const MedicationLogList: React.FC = () => {
     const logsRef = ref(database, 'medication_logs');
     // Query to order logs by timestamp. Firebase RTDB sorts numbers in ascending order.
     // We will reverse client-side for descending order.
-    const logsQuery = query(logsRef, orderByChild('timestamp'));
+    const logsQuery = query(logsRef, orderByChild('timestamp_millis'));
 
     const unsubscribe = onValue(logsQuery, (snapshot) => {
       setIsLoading(true);
       const logsData: MedicationLog[] = [];
       if (snapshot.exists()) {
         snapshot.forEach((childSnapshot) => {
-          logsData.push({ id: childSnapshot.key!, ...childSnapshot.val() });
+          const logValue = childSnapshot.val();
+          // Basic validation to ensure it's a log entry we expect
+          if (logValue && typeof logValue.timestamp_millis === 'number') {
+            logsData.push({ id: childSnapshot.key!, ...logValue });
+          }
         });
         // Firebase returns ascending, so we reverse for descending (most recent first)
         setLogs(logsData.reverse());

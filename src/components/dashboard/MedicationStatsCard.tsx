@@ -50,7 +50,7 @@ const MedicationStatsCard: React.FC = () => {
     setIsLoading(true);
     const scheduleRef = ref(database, 'schedules');
     const logsRef = ref(database, 'medication_logs');
-    const logsQuery = query(logsRef, orderByChild('timestamp'));
+    const logsQuery = query(logsRef, orderByChild('timestamp_millis'));
 
     let scheduleDataInternal: WeekSchedule | null = null;
     let logsDataInternal: MedicationLog[] = [];
@@ -97,7 +97,7 @@ const MedicationStatsCard: React.FC = () => {
       }
       
       const takenTodayLogs = logsDataInternal.filter(log =>
-        log.timestamp >= startOfToday.getTime() && log.timestamp <= endOfToday.getTime()
+        log.timestamp_millis >= startOfToday.getTime() && log.timestamp_millis <= endOfToday.getTime()
       ).length;
 
       let calculatedScheduledThisWeekPast = 0;
@@ -121,7 +121,7 @@ const MedicationStatsCard: React.FC = () => {
         }
         
         const dayLogs = logsDataInternal.filter(log => {
-            const logDate = new Date(log.timestamp);
+            const logDate = new Date(log.timestamp_millis);
             return isSameDay(logDate, dayToConsider);
         }).length;
         calculatedTakenThisWeek += dayLogs;
@@ -175,7 +175,10 @@ const MedicationStatsCard: React.FC = () => {
       const allLogs: MedicationLog[] = [];
       if (logsSnapshot.exists()) {
         logsSnapshot.forEach((childSnapshot) => {
-          allLogs.push({ id: childSnapshot.key!, ...childSnapshot.val() });
+           const logValue = childSnapshot.val();
+           if (logValue && typeof logValue.timestamp_millis === 'number') {
+             allLogs.push({ id: childSnapshot.key!, ...logValue });
+           }
         });
       }
       logsDataInternal = allLogs;

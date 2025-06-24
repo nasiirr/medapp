@@ -38,8 +38,9 @@ const MedicationLogList: React.FC = () => {
           }
         });
         // The query fetches logs from oldest to newest.
-        // We reverse the array here to ensure they are displayed from newest to oldest.
-        setLogs(logsData.reverse());
+        // We sort the array explicitly here to ensure they are displayed from newest to oldest.
+        logsData.sort((a, b) => b.timestamp_millis - a.timestamp_millis);
+        setLogs(logsData);
       } else {
         setLogs([]);
       }

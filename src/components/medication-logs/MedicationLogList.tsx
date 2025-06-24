@@ -26,8 +26,6 @@ const MedicationLogList: React.FC = () => {
       return;
     }
     const logsRef = ref(database, 'medication_logs');
-    // Query to order logs by timestamp. Firebase RTDB sorts numbers in ascending order.
-    // We will reverse client-side for descending order.
     const logsQuery = query(logsRef, orderByChild('timestamp_millis'));
 
     const unsubscribe = onValue(logsQuery, (snapshot) => {
@@ -36,15 +34,13 @@ const MedicationLogList: React.FC = () => {
       if (snapshot.exists()) {
         snapshot.forEach((childSnapshot) => {
           const logValue = childSnapshot.val();
-          // Basic validation to ensure it's a log entry we expect
           if (logValue && typeof logValue.timestamp_millis === 'number') {
             logsData.push({ id: childSnapshot.key!, ...logValue });
           }
         });
-        // Firebase returns ascending, so we reverse for descending (most recent first)
         setLogs(logsData.reverse());
       } else {
-        setLogs([]); // No logs found
+        setLogs([]);
       }
       setIsLoading(false);
     }, (err) => {
@@ -97,7 +93,7 @@ const MedicationLogList: React.FC = () => {
             <Table>
               <TableHeader className="sticky top-0 bg-card z-10">
                 <TableRow>
-                  <TableHead>Status</TableHead>
+                  <TableHead>Action</TableHead>
                   <TableHead>Time</TableHead>
                   <TableHead>Device ID</TableHead>
                 </TableRow>

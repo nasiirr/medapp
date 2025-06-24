@@ -1,9 +1,9 @@
-import PageClient from './page-client';
+import HistoryPageClient from './page-client';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { Pill, CalendarClock } from 'lucide-react';
+import { Pill, Home } from 'lucide-react';
 
-export default function Home() {
+export default function HistoryPage() {
   return (
     <div className="flex flex-col min-h-screen">
       <header className="bg-primary text-primary-foreground shadow-md">
@@ -13,17 +13,17 @@ export default function Home() {
             <h1 className="text-2xl font-headline font-bold">MediTrack</h1>
           </Link>
           <nav>
-            <Link href="/history" legacyBehavior passHref>
+            <Link href="/" legacyBehavior passHref>
               <Button variant="ghost">
-                <CalendarClock className="mr-2" />
-                History
+                <Home className="mr-2" />
+                Dashboard
               </Button>
             </Link>
           </nav>
         </div>
       </header>
       <main className="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <PageClient />
+        <HistoryPageClient />
       </main>
       <footer className="bg-muted text-muted-foreground py-4 text-center text-sm">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">

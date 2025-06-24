@@ -37,7 +37,7 @@ const MedicationLogList: React.FC = () => {
             logsData.push({ id: childSnapshot.key!, ...logValue });
           }
         });
-        // The query fetches logs from oldest to newest.
+        // The query can sometimes return items out of order.
         // We sort the array explicitly here to ensure they are displayed from newest to oldest.
         logsData.sort((a, b) => b.timestamp_millis - a.timestamp_millis);
         setLogs(logsData);

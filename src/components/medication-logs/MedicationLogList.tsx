@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { database } from '@/lib/firebase';
-import { ref, onValue, query, orderByChild } from 'firebase/database';
+import { ref, onValue } from 'firebase/database';
 import type { MedicationLog } from '@/types';
 import LogItem from './LogItem';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,21 +25,23 @@ const MedicationLogList: React.FC = () => {
       setIsLoading(false);
       return;
     }
+    // Fetch all logs without a specific query order. We will sort on the client.
     const logsRef = ref(database, 'medication_logs');
-    const logsQuery = query(logsRef, orderByChild('timestamp_millis'));
 
-    const unsubscribe = onValue(logsQuery, (snapshot) => {
+    const unsubscribe = onValue(logsRef, (snapshot) => {
       const logsData: MedicationLog[] = [];
       if (snapshot.exists()) {
         snapshot.forEach((childSnapshot) => {
           const logValue = childSnapshot.val();
+          // Ensure the log has a valid timestamp before adding it
           if (logValue && typeof logValue.timestamp_millis === 'number') {
             logsData.push({ id: childSnapshot.key!, ...logValue });
           }
         });
-        // The query can sometimes return items out of order.
-        // We sort the array explicitly here to ensure they are displayed from newest to oldest.
+
+        // Robustly sort the array on the client-side to ensure descending order.
         logsData.sort((a, b) => b.timestamp_millis - a.timestamp_millis);
+        
         setLogs(logsData);
       } else {
         setLogs([]);

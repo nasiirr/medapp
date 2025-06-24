@@ -29,7 +29,6 @@ const MedicationLogList: React.FC = () => {
     const logsQuery = query(logsRef, orderByChild('timestamp_millis'));
 
     const unsubscribe = onValue(logsQuery, (snapshot) => {
-      setIsLoading(true);
       const logsData: MedicationLog[] = [];
       if (snapshot.exists()) {
         snapshot.forEach((childSnapshot) => {
@@ -38,6 +37,8 @@ const MedicationLogList: React.FC = () => {
             logsData.push({ id: childSnapshot.key!, ...logValue });
           }
         });
+        // The query fetches logs from oldest to newest.
+        // We reverse the array here to ensure they are displayed from newest to oldest.
         setLogs(logsData.reverse());
       } else {
         setLogs([]);

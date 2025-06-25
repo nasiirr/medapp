@@ -4,17 +4,20 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { database } from '@/lib/firebase';
 import { ref, onValue, set } from 'firebase/database';
-import type { WeekSchedule, DoseTime } from '@/types';
+import type { WeekSchedule, DoseTime, DoseSlot } from '@/types';
 import ScheduleEditor from './ScheduleEditor';
 import { useToast } from "@/hooks/use-toast";
 import { ensureScheduleArray } from '@/lib/utils';
 
 const createInitialSchedule = (): WeekSchedule => {
-  const dailyDefaultTimes: DoseTime[] = ["08:00", "12:00", "13:00", "20:00"].sort();
+  const dailyDefaultTimes: DoseSlot[] = [
+    { time: "08:00", enabled: true },
+    { time: "12:00", enabled: true },
+    { time: "18:00", enabled: true },
+    { time: "22:00", enabled: true }, // Optional dose enabled by default
+  ].sort((a, b) => a.time.localeCompare(b.time));
   return Array(7).fill(null).map(() => [...dailyDefaultTimes]);
 };
-
-const initialSchedule: WeekSchedule = createInitialSchedule();
 
 const ScheduleManager: React.FC = () => {
   const [schedule, setSchedule] = useState<WeekSchedule | null>(null);
@@ -36,24 +39,14 @@ const ScheduleManager: React.FC = () => {
       let finalSchedule: WeekSchedule;
       if (snapshot.exists()) {
         const rawData = snapshot.val();
-        let baseSchedule = ensureScheduleArray(rawData); 
+        const convertedSchedule = ensureScheduleArray(rawData);
 
-        if (baseSchedule && baseSchedule.length === 7) {
-          finalSchedule = baseSchedule.map(dayTimes => {
-            let times = Array.isArray(dayTimes)
-              ? dayTimes.filter(t => typeof t === 'string' && /^\d{2}:\d{2}$/.test(t))
-              : [];
-            
-            times.sort();
-
-            const normalizedDayTimes: DoseTime[] = [];
-            for (let i = 0; i < 4; i++) {
-              normalizedDayTimes.push(times[i] || "00:00"); 
-            }
-            return normalizedDayTimes.sort(); 
-          });
+        if (convertedSchedule) {
+          finalSchedule = convertedSchedule.map(daySlots => 
+            daySlots.sort((a, b) => a.time.localeCompare(b.time))
+          );
         } else {
-          console.warn("Firebase schedule data is malformed or not a 7-day array. Resetting to default.", rawData);
+          console.warn("Firebase schedule data is malformed. Resetting to default.", rawData);
           finalSchedule = createInitialSchedule();
           try {
             await set(scheduleRef, finalSchedule);
@@ -91,16 +84,27 @@ const ScheduleManager: React.FC = () => {
     }
     setSchedule(prevSchedule => {
       if (!prevSchedule) return null;
-      const newSchedule = prevSchedule.map(day => [...day]);
+      const newSchedule = prevSchedule.map(day => day.map(slot => ({...slot})));
       if (newSchedule[dayIndex] && newSchedule[dayIndex][doseSlotIndex] !== undefined) {
-        newSchedule[dayIndex][doseSlotIndex] = newTime;
-        newSchedule[dayIndex] = [...newSchedule[dayIndex]].sort(); 
+        newSchedule[dayIndex][doseSlotIndex].time = newTime;
+        newSchedule[dayIndex] = [...newSchedule[dayIndex]].sort((a, b) => a.time.localeCompare(b.time));
       } else {
          console.warn(`Attempted to edit non-existent slot: day ${dayIndex}, slot ${doseSlotIndex}`);
       }
       return newSchedule;
     });
   }, [toast]);
+
+  const handleToggleDoseEnabled = useCallback((dayIndex: number, doseSlotIndex: number, isEnabled: boolean) => {
+    setSchedule(prevSchedule => {
+      if (!prevSchedule) return null;
+      const newSchedule = prevSchedule.map(day => day.map(slot => ({...slot})));
+      if (newSchedule[dayIndex] && newSchedule[dayIndex][doseSlotIndex] !== undefined) {
+        newSchedule[dayIndex][doseSlotIndex].enabled = isEnabled;
+      }
+      return newSchedule;
+    });
+  }, []);
 
   const handleSaveSchedule = async () => {
     if (!schedule) {
@@ -115,7 +119,6 @@ const ScheduleManager: React.FC = () => {
     setError(null);
     try {
       const scheduleRef = ref(database, 'schedules');
-      // Schedule state should already be normalized (4 slots per day, sorted)
       await set(scheduleRef, schedule);
       toast({ title: "Schedule Saved", description: "Your medication schedule has been updated successfully.", className: "bg-accent text-accent-foreground" });
     } catch (e) {
@@ -135,6 +138,7 @@ const ScheduleManager: React.FC = () => {
     <ScheduleEditor
       schedule={schedule}
       onEditDoseTime={handleEditDoseTime}
+      onToggleDoseEnabled={handleToggleDoseEnabled}
       onSave={handleSaveSchedule}
       isSaving={isSaving}
       isScheduleLoading={isLoadingData}

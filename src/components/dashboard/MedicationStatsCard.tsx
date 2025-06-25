@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { database } from '@/lib/firebase';
 import { ref, onValue, query, orderByChild } from 'firebase/database';
-import type { WeekSchedule, MedicationLog } from '@/types';
+import type { WeekSchedule, MedicationLog, DoseSlot } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ClipboardList, AlertCircle, TrendingUp, TrendingDown, CheckCircle } from 'lucide-react';
@@ -83,10 +83,11 @@ const MedicationStatsCard: React.FC = () => {
 
       let calculatedScheduledTodayPast = 0;
       const currentDayIndex = getDay(now);
-      const todayScheduleTimes = scheduleDataInternal[currentDayIndex] || [];
-      for (const timeStr of todayScheduleTimes) {
+      const todayScheduleSlots = (scheduleDataInternal[currentDayIndex] || []).filter(s => s.enabled);
+      for (const doseSlot of todayScheduleSlots) {
+        const timeStr = doseSlot.time;
         if (typeof timeStr !== 'string' || !/^\d{2}:\d{2}$/.test(timeStr)) {
-          console.warn(`MedicationStatsCard: Invalid time_str '${String(timeStr)}' (type: ${typeof timeStr}) in schedule for day ${currentDayIndex} (today's calculation). Skipping. Full schedule:`, JSON.stringify(scheduleDataInternal));
+          console.warn(`MedicationStatsCard: Invalid time_str '${String(timeStr)}' in schedule for day ${currentDayIndex}. Skipping.`);
           continue;
         }
         const [hour, minute] = timeStr.split(':').map(Number);
@@ -106,11 +107,12 @@ const MedicationStatsCard: React.FC = () => {
       for (let i = 0; i < 7; i++) { 
         const dayToConsider = subDays(now, i);
         const dayIndexInSchedule = getDay(dayToConsider);
-        const dayScheduleTimesForCalc = scheduleDataInternal[dayIndexInSchedule] || [];
+        const dayScheduleSlotsForCalc = (scheduleDataInternal[dayIndexInSchedule] || []).filter(s => s.enabled);
 
-        for (const timeStr of dayScheduleTimesForCalc) {
+        for (const doseSlot of dayScheduleSlotsForCalc) {
+          const timeStr = doseSlot.time;
           if (typeof timeStr !== 'string' || !/^\d{2}:\d{2}$/.test(timeStr)) {
-            console.warn(`MedicationStatsCard: Invalid time_str '${String(timeStr)}' (type: ${typeof timeStr}) in schedule for day ${dayIndexInSchedule} (week calculation). Skipping. Full schedule:`, JSON.stringify(scheduleDataInternal));
+            console.warn(`MedicationStatsCard: Invalid time_str '${String(timeStr)}' in schedule for day ${dayIndexInSchedule}. Skipping.`);
             continue;
           }
           const [hour, minute] = timeStr.split(':').map(Number);
@@ -145,15 +147,8 @@ const MedicationStatsCard: React.FC = () => {
       if (scheduleSnapshot.exists()) {
         const rawData = scheduleSnapshot.val();
         const convertedData = ensureScheduleArray(rawData);
-        if (
-          convertedData &&
-          convertedData.length === 7 &&
-          convertedData.every(daySchedule => 
-            Array.isArray(daySchedule) && 
-            daySchedule.every(time => typeof time === 'string' && /^\d{2}:\d{2}$/.test(time))
-          )
-        ) {
-          scheduleDataInternal = convertedData.map(dayTimes => dayTimes.sort());
+        if (convertedData) {
+          scheduleDataInternal = convertedData;
           scheduleError = null;
         } else {
           console.warn("MedicationStatsCard: Firebase schedule data is malformed or incompatible. Raw data:", rawData);

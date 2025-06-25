@@ -1,6 +1,12 @@
 
 export type DoseTime = string; // Represents "HH:MM", e.g., "08:30", "14:15"
-export type DaySchedule = DoseTime[]; // An array of "HH:MM" strings for a day, should be kept sorted
+
+export interface DoseSlot {
+  time: DoseTime;
+  enabled: boolean;
+}
+
+export type DaySchedule = DoseSlot[]; // An array of DoseSlots for a day, should be kept sorted by time
 export type WeekSchedule = DaySchedule[]; // Array of 7 DaySchedules
 
 export interface MedicationLog {

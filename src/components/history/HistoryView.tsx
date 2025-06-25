@@ -22,11 +22,12 @@ import {
   setSeconds,
   isBefore,
   isAfter,
+  endOfDay,
 } from 'date-fns';
 import { ensureScheduleArray } from '@/lib/utils';
 import DayCard from './DayCard';
 
-const doseSlotLabels = ["Morning Dose", "Afternoon Dose", "Night Dose", "Optional/Emergency Dose"];
+const doseSlotLabels = ["Morning Dose", "Afternoon Dose", "Evening Dose", "Optional Dose"];
 
 const HistoryView: React.FC = () => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -48,7 +49,12 @@ const HistoryView: React.FC = () => {
 
     const unsubSchedule = onValue(scheduleRef, (snapshot) => {
       if (snapshot.exists()) {
-        setSchedule(ensureScheduleArray(snapshot.val()));
+        const convertedSchedule = ensureScheduleArray(snapshot.val());
+        if (convertedSchedule) {
+          setSchedule(convertedSchedule);
+        } else {
+          setError("Schedule data is malformed.");
+        }
       } else {
         setError("Schedule not found.");
       }
@@ -77,7 +83,7 @@ const HistoryView: React.FC = () => {
   }, []);
 
   const monthHistory = useMemo((): DayHistory[] => {
-    if (!schedule || !logs) return [];
+    if (!schedule) return [];
 
     const monthDays = eachDayOfInterval({
       start: startOfMonth(currentMonth),
@@ -86,26 +92,29 @@ const HistoryView: React.FC = () => {
 
     return monthDays.map(day => {
       const dayOfWeek = getDay(day);
-      const daySchedule = schedule[dayOfWeek] || [];
+      const daySchedule = (schedule[dayOfWeek] || []).filter(slot => slot.enabled);
+      
       const dayLogs = logs.filter(log =>
         new Date(log.timestamp_millis).toDateString() === day.toDateString()
       );
 
-      const doses: DoseStatus[] = daySchedule.map((scheduledTime, index) => {
+      const doses: DoseStatus[] = daySchedule.map((doseSlot, index) => {
+        const scheduledTime = doseSlot.time;
         const [hour, minute] = scheduledTime.split(':').map(Number);
         const doseDateTime = setSeconds(setMinutes(setHours(day, hour), minute), 0);
         
-        const nextScheduledTimeStr = daySchedule[index + 1];
+        const nextScheduledSlot = daySchedule[index + 1];
         let windowEnd: Date;
-        if (nextScheduledTimeStr) {
-          const [nextHour, nextMinute] = nextScheduledTimeStr.split(':').map(Number);
+        if (nextScheduledSlot) {
+          const [nextHour, nextMinute] = nextScheduledSlot.time.split(':').map(Number);
           windowEnd = setSeconds(setMinutes(setHours(day, nextHour), nextMinute), 0);
         } else {
-          windowEnd = endOfMonth(day);
+          windowEnd = endOfDay(day);
         }
 
         const logInWindow = dayLogs.find(log => {
           const logTime = new Date(log.timestamp_millis);
+          // A log is considered in the window if it's after the scheduled time but before the next scheduled time.
           return isAfter(logTime, doseDateTime) && isBefore(logTime, windowEnd);
         });
         
@@ -113,9 +122,8 @@ const HistoryView: React.FC = () => {
         if (logInWindow) {
           status = logInWindow.action === 'medication_confirmed' ? 'taken' : 'missed';
         } else if (isBefore(doseDateTime, new Date())) {
-          // If the scheduled time is in the past and no log was found, it's considered missed.
-          // Note: This assumes a log is *always* generated. If not, this might be inaccurate.
-          // We rely on explicit "medication_missed" logs primarily.
+          // If the slot time is in the past and no log was found for it, it's missed.
+          status = 'missed';
         }
 
         return {

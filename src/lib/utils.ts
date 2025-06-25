@@ -1,47 +1,77 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
-import type { WeekSchedule, DaySchedule } from "@/types";
+import type { WeekSchedule, DaySchedule, DoseSlot } from "@/types";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
 /**
- * Ensures that the data fetched from Firebase, which might be an object
- * representing an array, is converted to a JavaScript array if it matches
- * the expected structure of a WeekSchedule.
+ * Ensures that the data fetched from Firebase is converted to a valid WeekSchedule,
+ * migrating old data formats (string array) to the new format (DoseSlot object array).
  * @param data The raw data from Firebase snapshot.val().
  * @returns A WeekSchedule array or null if conversion is not possible or data is invalid.
  */
 export function ensureScheduleArray(data: any): WeekSchedule | null {
-  if (Array.isArray(data)) {
-    // Basic check if it's already an array of arrays. Deeper validation will occur later.
-    if (data.length === 7 && data.every(day => Array.isArray(day))) {
-      return data as WeekSchedule;
+  if (!data) return null;
+
+  let scheduleData: any[] = [];
+
+  // Handle Firebase array-like object: { "0": [...], "1": [...] }
+  if (typeof data === 'object' && !Array.isArray(data)) {
+    const keys = Object.keys(data).map(Number).sort((a, b) => a - b);
+    if (keys.length > 0 && keys.every((k, i) => i < keys.length ? k === i : true)) { // Allow partial schedules
+      scheduleData = Array.from({ length: 7 }, (_, i) => data[i] || []);
+    } else {
+      return null;
     }
-    return null; // Or handle as malformed
+  } else if (Array.isArray(data)) {
+    scheduleData = data;
+  } else {
+    return null;
+  }
+  
+  // Pad schedule to 7 days if it's shorter
+  while (scheduleData.length < 7) {
+    scheduleData.push([]);
   }
 
-  if (data && typeof data === 'object' && !Array.isArray(data)) {
-    const keys = Object.keys(data).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
-    const expectedKeys = Array.from({ length: 7 }, (_, i) => i.toString());
+  const newWeekSchedule: WeekSchedule = [];
 
-    // Check if it looks like a 7-day schedule object {"0": [...], "1": [...], ... "6": [...]}
-    const isFirebaseArrayLike = keys.length === 7 && keys.every((k, i) => k === expectedKeys[i]);
-
-    if (isFirebaseArrayLike) {
-      const potentialArray: DaySchedule[] = [];
-      for (let i = 0; i < 7; i++) {
-        const dayData = (data as any)[i.toString()];
-        if (Array.isArray(dayData)) {
-          potentialArray.push(dayData);
-        } else {
-          // If any day is not an array, the structure is invalid for our needs
-          return null;
+  for (const dayData of scheduleData) {
+    const newDaySchedule: DaySchedule = [];
+    if (Array.isArray(dayData)) {
+      for (const doseData of dayData) {
+        if (typeof doseData === 'string' && /^\d{2}:\d{2}$/.test(doseData)) {
+          // Old format: migrate it, assuming enabled
+          newDaySchedule.push({ time: doseData, enabled: true });
+        } else if (
+          typeof doseData === 'object' &&
+          doseData !== null &&
+          'time' in doseData &&
+          typeof doseData.time === 'string' &&
+          'enabled' in doseData &&
+          typeof doseData.enabled === 'boolean'
+        ) {
+          // New format: use it as is
+          newDaySchedule.push(doseData as DoseSlot);
         }
       }
-      return potentialArray;
     }
+    
+    // Ensure exactly 4 slots per day for consistency, filling with disabled slots.
+    while (newDaySchedule.length < 4) {
+      const isOptionalDose = newDaySchedule.length === 3;
+      newDaySchedule.push({ time: "00:00", enabled: !isOptionalDose });
+    }
+
+    // Sort and take the first 4
+    const finalDaySchedule = newDaySchedule
+      .slice(0, 4)
+      .sort((a, b) => a.time.localeCompare(b.time));
+      
+    newWeekSchedule.push(finalDaySchedule);
   }
-  return null; // Not an array and not a convertible object
+
+  return newWeekSchedule;
 }

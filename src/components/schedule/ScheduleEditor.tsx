@@ -1,36 +1,42 @@
+
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import type { WeekSchedule, DoseTime } from '@/types';
+import type { WeekSchedule, DoseSlot, DoseTime } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import NewTimePicker from './NewTimePicker';
 import { Clock, Save, Edit3, XCircle, CheckCircle } from 'lucide-react';
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 interface ScheduleEditorProps {
   schedule: WeekSchedule | null;
   onEditDoseTime: (dayIndex: number, doseSlotIndex: number, newTime: DoseTime) => void;
+  onToggleDoseEnabled: (dayIndex: number, doseSlotIndex: number, enabled: boolean) => void;
   onSave: () => void;
   isSaving: boolean;
   isScheduleLoading: boolean;
 }
 
 const baseDaysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const doseSlotLabels = ["Morning Dose", "Afternoon Dose", "Night Dose", "Optional/Emergency Dose"];
+const doseSlotLabels = ["Morning Dose", "Afternoon Dose", "Evening Dose", "Optional Dose"];
 
 // Helper to format "HH:mm" to "hh:mm a"
-const formatTimeForDisplay = (timeStr: DoseTime): string => {
-  if (!timeStr || !/^\d{2}:\d{2}$/.test(timeStr)) return "Not Set";
+const formatTimeForDisplay = (dose: DoseSlot): string => {
+  if (!dose.enabled) return "Disabled";
+  if (!dose.time || !/^\d{2}:\d{2}$/.test(dose.time)) return "Not Set";
   try {
-    const [hours, minutes] = timeStr.split(':');
+    const [hours, minutes] = dose.time.split(':');
     const date = new Date();
     date.setHours(parseInt(hours, 10));
     date.setMinutes(parseInt(minutes, 10));
     return format(date, 'p'); // 'p' is short for hh:mm a
   } catch (error) {
-    console.error("Error formatting time:", timeStr, error);
+    console.error("Error formatting time:", dose.time, error);
     return "Invalid";
   }
 };
@@ -39,6 +45,7 @@ const formatTimeForDisplay = (timeStr: DoseTime): string => {
 const ScheduleEditor: React.FC<ScheduleEditorProps> = ({
   schedule,
   onEditDoseTime,
+  onToggleDoseEnabled,
   onSave,
   isSaving,
   isScheduleLoading,
@@ -64,7 +71,12 @@ const ScheduleEditor: React.FC<ScheduleEditorProps> = ({
         newOrderedScheduleData.push(
           Array.isArray(daySchedule) && daySchedule.length === 4
             ? daySchedule
-            : ["00:00", "00:00", "00:00", "00:00"]
+            : [
+                { time: "00:00", enabled: true },
+                { time: "00:00", enabled: true },
+                { time: "00:00", enabled: true },
+                { time: "00:00", enabled: false },
+              ]
         );
       }
       setOrderedDisplaySchedule(newOrderedScheduleData);
@@ -73,9 +85,10 @@ const ScheduleEditor: React.FC<ScheduleEditorProps> = ({
     }
   }, [schedule]);
 
-  const handleStartEdit = (originalDayIdx: number, doseSlotIdx: number, currentTime: DoseTime) => {
+  const handleStartEdit = (originalDayIdx: number, doseSlotIdx: number, dose: DoseSlot) => {
+    if (!dose.enabled) return;
     setEditingSlotKey(`${originalDayIdx}-${doseSlotIdx}`);
-    setCurrentEditValue(currentTime);
+    setCurrentEditValue(dose.time);
   };
 
   const handleCancelEdit = () => {
@@ -127,7 +140,7 @@ const ScheduleEditor: React.FC<ScheduleEditorProps> = ({
             <Clock className="mr-2 h-6 w-6 text-primary" />
             Medication Schedule
           </CardTitle>
-          <CardDescription>Set precise times for your four daily medication slots. Click a time to edit. Times are auto-sorted after editing.</CardDescription>
+          <CardDescription>Set times for your medication slots. The optional dose can be toggled on or off.</CardDescription>
         </div>
         <Button onClick={onSave} disabled={isSaving || !schedule || !!editingSlotKey} size="lg">
           {isSaving ? 'Saving...' : <><Save className="mr-2 h-5 w-5" /> Save Schedule</>}
@@ -140,7 +153,7 @@ const ScheduleEditor: React.FC<ScheduleEditorProps> = ({
           <div className="space-y-6">
             {orderedDisplayDays.map((dayName, displayedDayIdx) => {
               const originalDayIndex = (currentDayOriginalIndex + displayedDayIdx) % 7;
-              const dayScheduleTimes = orderedDisplaySchedule[displayedDayIdx] || ["00:00", "00:00", "00:00", "00:00"];
+              const daySchedule = orderedDisplaySchedule[displayedDayIdx] || [];
 
               return (
                 <Card key={originalDayIndex} className="bg-background/50">
@@ -148,14 +161,27 @@ const ScheduleEditor: React.FC<ScheduleEditorProps> = ({
                     <CardTitle className="text-lg text-primary">{dayName}</CardTitle>
                   </CardHeader>
                   <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                    {dayScheduleTimes.map((time, doseSlotIndex) => {
+                    {daySchedule.map((dose, doseSlotIndex) => {
                       const slotKey = `${originalDayIndex}-${doseSlotIndex}`;
                       const isEditingThisSlot = editingSlotKey === slotKey;
+                      const isOptionalDose = doseSlotIndex === 3;
                       const labelText = doseSlotLabels[doseSlotIndex] || `Dose ${doseSlotIndex + 1}`;
 
                       return (
-                        <div key={doseSlotIndex} className="flex flex-col items-start gap-2 p-3 border rounded-md bg-card/80 shadow">
-                          <label className="text-sm font-medium text-muted-foreground ml-1">{labelText}</label>
+                        <div key={doseSlotIndex} className={cn("flex flex-col items-start gap-2 p-3 border rounded-md bg-card/80 shadow transition-opacity", !dose.enabled && "opacity-60")}>
+                           <div className="flex justify-between items-center w-full">
+                            <Label htmlFor={isEditingThisSlot ? `time-picker-${slotKey}` : undefined} className="text-sm font-medium text-muted-foreground ml-1">{labelText}</Label>
+                            {isOptionalDose && (
+                              <div className="flex items-center space-x-2">
+                                  <Switch
+                                      id={`enable-switch-${slotKey}`}
+                                      checked={dose.enabled}
+                                      onCheckedChange={(checked) => onToggleDoseEnabled(originalDayIndex, doseSlotIndex, checked)}
+                                      aria-label={dose.enabled ? 'Disable optional dose' : 'Enable optional dose'}
+                                  />
+                              </div>
+                            )}
+                          </div>
                           {isEditingThisSlot ? (
                             <div className="w-full flex flex-col gap-2 flex-grow justify-center">
                               <NewTimePicker
@@ -174,12 +200,13 @@ const ScheduleEditor: React.FC<ScheduleEditorProps> = ({
                             </div>
                           ) : (
                             <button
-                              onClick={() => handleStartEdit(originalDayIndex, doseSlotIndex, time)}
-                              className="flex items-center justify-between w-full p-2 rounded-md hover:bg-muted/50 transition-colors cursor-pointer flex-grow min-h-[40px]"
-                              aria-label={`Edit ${labelText} currently set to ${formatTimeForDisplay(time)}`}
+                              onClick={() => handleStartEdit(originalDayIndex, doseSlotIndex, dose)}
+                              disabled={!dose.enabled}
+                              className="flex items-center justify-between w-full p-2 rounded-md hover:bg-muted/50 transition-colors cursor-pointer flex-grow min-h-[40px] disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                              aria-label={`Edit ${labelText} currently set to ${formatTimeForDisplay(dose)}`}
                             >
-                              <span className="text-2xl font-semibold text-foreground">{formatTimeForDisplay(time)}</span>
-                              <Edit3 className="h-5 w-5 text-muted-foreground group-hover:text-primary" />
+                              <span className={cn("text-2xl font-semibold", dose.enabled ? "text-foreground" : "text-muted-foreground")}>{formatTimeForDisplay(dose)}</span>
+                              {dose.enabled && <Edit3 className="h-5 w-5 text-muted-foreground group-hover:text-primary" />}
                             </button>
                           )}
                         </div>

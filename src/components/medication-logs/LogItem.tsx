@@ -1,4 +1,3 @@
-
 "use client";
 
 import type React from 'react';
@@ -16,24 +15,33 @@ const LogItem: React.FC<LogItemProps> = ({ log }) => {
   const StatusIcon = isTaken ? CheckCircle : XCircle;
   const iconColor = isTaken ? 'text-accent' : 'text-destructive';
 
+  // Defensive check for formatted_time to prevent errors if it's missing
+  const timeParts = log.formatted_time?.split(' ') || [];
+  const datePart = timeParts[0] || '';
+  const timePart = timeParts.length > 1 ? timeParts.slice(1).join(' ') : '';
+
+
   return (
     <TableRow className="transition-colors hover:bg-muted/30">
       <TableCell>
         <div className="flex items-center gap-2">
           <StatusIcon className={`h-5 w-5 ${iconColor}`} />
-          <span className="font-medium">{statusText}</span>
+          <span className="font-medium whitespace-nowrap">{statusText}</span>
         </div>
       </TableCell>
       <TableCell>
         <div className="flex items-center gap-2">
-          <CalendarDays className="h-5 w-5 text-muted-foreground" />
-          <span>{log.formatted_time}</span>
+          <CalendarDays className="h-4 w-4 text-muted-foreground" />
+          <div className="flex flex-col">
+            <span className="font-mono text-sm">{datePart}</span>
+            <span className="font-mono text-xs text-muted-foreground">{timePart}</span>
+          </div>
         </div>
       </TableCell>
       <TableCell>
         <div className="flex items-center gap-2">
-          <Smartphone className="h-5 w-5 text-muted-foreground" />
-          <span>{log.device_id}</span>
+          <Smartphone className="h-4 w-4 text-muted-foreground" />
+          <span className="font-mono text-xs break-all">{log.device_id}</span>
         </div>
       </TableCell>
     </TableRow>

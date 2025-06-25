@@ -106,6 +106,25 @@ const ScheduleManager: React.FC = () => {
     });
   }, []);
 
+  const handleToggleWeeklyDoseSlot = useCallback((doseSlotIndex: number) => {
+    setSchedule(prevSchedule => {
+      if (!prevSchedule) return null;
+      
+      const shouldDisableAll = prevSchedule.some(day => day[doseSlotIndex]?.enabled);
+      const newEnabledState = !shouldDisableAll;
+
+      const newSchedule = prevSchedule.map(day => {
+        const newDay = day.map(slot => ({...slot}));
+        if (newDay[doseSlotIndex]) {
+          newDay[doseSlotIndex].enabled = newEnabledState;
+        }
+        return newDay;
+      });
+      
+      return newSchedule;
+    });
+  }, []);
+
   const handleSaveSchedule = async () => {
     if (!schedule) {
       toast({ variant: "destructive", title: "Error", description: "No schedule data to save." });
@@ -139,6 +158,7 @@ const ScheduleManager: React.FC = () => {
       schedule={schedule}
       onEditDoseTime={handleEditDoseTime}
       onToggleDoseEnabled={handleToggleDoseEnabled}
+      onToggleWeeklyDoseSlot={handleToggleWeeklyDoseSlot}
       onSave={handleSaveSchedule}
       isSaving={isSaving}
       isScheduleLoading={isLoadingData}

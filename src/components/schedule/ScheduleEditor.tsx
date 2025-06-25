@@ -1,14 +1,13 @@
-
 "use client";
 
 import React, { useState, useEffect } from 'react';
 import type { WeekSchedule, DoseTime } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import CustomTimePicker from './CustomTimePicker';
+import NewTimePicker from './NewTimePicker';
 import { Clock, Save, Edit3, XCircle, CheckCircle } from 'lucide-react';
 import { Skeleton } from "@/components/ui/skeleton";
-import { format, parse } from 'date-fns';
+import { format } from 'date-fns';
 
 interface ScheduleEditorProps {
   schedule: WeekSchedule | null;
@@ -155,11 +154,11 @@ const ScheduleEditor: React.FC<ScheduleEditorProps> = ({
                       const labelText = doseSlotLabels[doseSlotIndex] || `Dose ${doseSlotIndex + 1}`;
 
                       return (
-                        <div key={doseSlotIndex} className="flex flex-col items-start gap-1 p-3 border rounded-md bg-card/80 shadow">
+                        <div key={doseSlotIndex} className="flex flex-col items-start gap-2 p-3 border rounded-md bg-card/80 shadow">
                           <label className="text-sm font-medium text-muted-foreground ml-1">{labelText}</label>
                           {isEditingThisSlot ? (
-                            <>
-                              <CustomTimePicker
+                            <div className="w-full flex flex-col gap-2 flex-grow justify-center">
+                              <NewTimePicker
                                 id={`time-picker-${slotKey}`}
                                 value={currentEditValue}
                                 onChange={setCurrentEditValue}
@@ -172,11 +171,11 @@ const ScheduleEditor: React.FC<ScheduleEditorProps> = ({
                                   <XCircle className="mr-1 h-4 w-4" /> Cancel
                                 </Button>
                               </div>
-                            </>
+                            </div>
                           ) : (
                             <button
                               onClick={() => handleStartEdit(originalDayIndex, doseSlotIndex, time)}
-                              className="flex items-center justify-between w-full p-2 rounded-md hover:bg-muted/50 transition-colors cursor-pointer"
+                              className="flex items-center justify-between w-full p-2 rounded-md hover:bg-muted/50 transition-colors cursor-pointer flex-grow min-h-[40px]"
                               aria-label={`Edit ${labelText} currently set to ${formatTimeForDisplay(time)}`}
                             >
                               <span className="text-2xl font-semibold text-foreground">{formatTimeForDisplay(time)}</span>
@@ -199,4 +198,3 @@ const ScheduleEditor: React.FC<ScheduleEditorProps> = ({
 };
 
 export default ScheduleEditor;
-

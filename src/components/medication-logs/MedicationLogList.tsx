@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -25,7 +24,7 @@ const MedicationLogList: React.FC = () => {
       setIsLoading(false);
       return;
     }
-    // Fetch all logs without a specific query order. We will sort on the client.
+    // Fetch all logs and we will sort on the client.
     const logsRef = ref(database, 'medication_logs');
 
     const unsubscribe = onValue(logsRef, (snapshot) => {
@@ -99,7 +98,6 @@ const MedicationLogList: React.FC = () => {
                 <TableRow>
                   <TableHead>Action</TableHead>
                   <TableHead>Time</TableHead>
-                  <TableHead>Device ID</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

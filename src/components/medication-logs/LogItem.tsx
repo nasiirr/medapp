@@ -3,7 +3,7 @@
 import type React from 'react';
 import type { MedicationLog } from '@/types';
 import { TableRow, TableCell } from '@/components/ui/table';
-import { CalendarDays, Smartphone, CheckCircle, XCircle } from 'lucide-react';
+import { CalendarDays, CheckCircle, XCircle } from 'lucide-react';
 
 interface LogItemProps {
   log: MedicationLog;
@@ -36,12 +36,6 @@ const LogItem: React.FC<LogItemProps> = ({ log }) => {
             <span className="font-mono text-sm">{datePart}</span>
             <span className="font-mono text-xs text-muted-foreground">{timePart}</span>
           </div>
-        </div>
-      </TableCell>
-      <TableCell>
-        <div className="flex items-center gap-2">
-          <Smartphone className="h-4 w-4 text-muted-foreground" />
-          <span className="font-mono text-xs break-all">{log.device_id}</span>
         </div>
       </TableCell>
     </TableRow>

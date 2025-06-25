@@ -143,7 +143,7 @@ const ScheduleEditor: React.FC<ScheduleEditorProps> = ({
   return (
     <TooltipProvider>
       <Card className="shadow-lg">
-        <CardHeader className="flex flex-row items-center justify-between pb-4">
+        <CardHeader className="flex flex-col items-start gap-4 md:flex-row md:items-center md:justify-between pb-4">
           <div>
             <CardTitle className="text-2xl font-headline font-semibold flex items-center">
               <Clock className="mr-2 h-6 w-6 text-primary" />
@@ -151,7 +151,7 @@ const ScheduleEditor: React.FC<ScheduleEditorProps> = ({
             </CardTitle>
             <CardDescription>Set and toggle times for your medication slots. Use the master controls to toggle a slot for the whole week.</CardDescription>
           </div>
-          <Button onClick={onSave} disabled={isSaving || !schedule || !!editingSlotKey} size="lg">
+          <Button onClick={onSave} disabled={isSaving || !schedule || !!editingSlotKey} size="lg" className="w-full md:w-auto">
             {isSaving ? 'Saving...' : <><Save className="mr-2 h-5 w-5" /> Save Schedule</>}
           </Button>
         </CardHeader>
